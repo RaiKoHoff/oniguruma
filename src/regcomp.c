@@ -811,7 +811,7 @@ compile_range_repeat_node(QuantNode* qn, int target_len, int empty_info,
 }
 
 static int
-is_anychar_star_quantifier(QuantNode* qn)
+is_anychar_infinite_greedy(QuantNode* qn)
 {
   if (qn->greedy && IS_REPEAT_INFINITE(qn->upper) &&
       NODE_IS_ANYCHAR(NODE_QUANT_BODY(qn)))
@@ -831,7 +831,7 @@ compile_length_quantifier_node(QuantNode* qn, regex_t* reg)
   int len, mod_tlen, cklen;
   int ckn;
   int infinite = IS_REPEAT_INFINITE(qn->upper);
-  int empty_info = qn->body_empty_info;
+  enum QuantBodyEmpty empty_info = qn->body_empty_info;
   int tlen = compile_length_tree(NODE_QUANT_BODY(qn), reg);
 
   if (tlen < 0) return tlen;
@@ -910,14 +910,14 @@ compile_quantifier_node(QuantNode* qn, regex_t* reg, ScanEnv* env)
   int r, mod_tlen;
   int ckn;
   int infinite = IS_REPEAT_INFINITE(qn->upper);
-  int empty_info = qn->body_empty_info;
+  enum QuantBodyEmpty empty_info = qn->body_empty_info;
   int tlen = compile_length_tree(NODE_QUANT_BODY(qn), reg);
 
   if (tlen < 0) return tlen;
 
   ckn = ((reg->num_comb_exp_check > 0) ? qn->comb_exp_check_num : 0);
 
-  if (is_anychar_star_quantifier(qn)) {
+  if (is_anychar_infinite_greedy(qn)) {
     r = compile_tree_n_times(NODE_QUANT_BODY(qn), qn->lower, reg, env);
     if (r != 0) return r;
     if (IS_NOT_NULL(qn->next_head_exact) && !CKN_ON) {
@@ -1063,13 +1063,14 @@ compile_length_quantifier_node(QuantNode* qn, regex_t* reg)
 {
   int len, mod_tlen;
   int infinite = IS_REPEAT_INFINITE(qn->upper);
-  int empty_info = qn->body_empty_info;
+  enum QuantBodyEmpty empty_info = qn->body_empty_info;
   int tlen = compile_length_tree(NODE_QUANT_BODY(qn), reg);
 
   if (tlen < 0) return tlen;
+  if (tlen == 0) return 0;
 
   /* anychar repeat */
-  if (is_anychar_star_quantifier(qn)) {
+  if (is_anychar_infinite_greedy(qn)) {
     if (qn->lower <= 1 || tlen * qn->lower <= QUANTIFIER_EXPAND_LIMIT_SIZE) {
       if (IS_NOT_NULL(qn->next_head_exact))
         return SIZE_OP_ANYCHAR_STAR_PEEK_NEXT + tlen * qn->lower;
@@ -1128,12 +1129,13 @@ compile_quantifier_node(QuantNode* qn, regex_t* reg, ScanEnv* env)
 {
   int i, r, mod_tlen;
   int infinite = IS_REPEAT_INFINITE(qn->upper);
-  int empty_info = qn->body_empty_info;
+  enum QuantBodyEmpty empty_info = qn->body_empty_info;
   int tlen = compile_length_tree(NODE_QUANT_BODY(qn), reg);
 
   if (tlen < 0) return tlen;
+  if (tlen == 0) return 0;
 
-  if (is_anychar_star_quantifier(qn) &&
+  if (is_anychar_infinite_greedy(qn) &&
       (qn->lower <= 1 || tlen * qn->lower <= QUANTIFIER_EXPAND_LIMIT_SIZE)) {
     r = compile_tree_n_times(NODE_QUANT_BODY(qn), qn->lower, reg, env);
     if (r != 0) return r;
@@ -4110,7 +4112,7 @@ setup_comb_exp_check(Node* node, int state, ScanEnv* env)
 #endif
 
 #ifdef USE_INSISTENT_CHECK_CAPTURES_STATUS_IN_ENDLESS_REPEAT
-static int
+static enum QuantBodyEmpty
 quantifiers_memory_node_info(Node* node)
 {
   int r = QUANT_BODY_IS_EMPTY;
@@ -4765,7 +4767,7 @@ setup_quant(Node* node, regex_t* reg, int state, ScanEnv* env)
   }
 
 #ifdef USE_OP_PUSH_OR_JUMP_EXACT
-  if (qn->greedy && (qn->body_empty_info != 0)) {
+  if (qn->greedy && (qn->body_empty_info != QUANT_BODY_IS_NOT_EMPTY)) {
     if (NODE_TYPE(body) == NODE_QUANT) {
       QuantNode* tqn = QUANT_(body);
       if (IS_NOT_NULL(tqn->head_exact)) {
