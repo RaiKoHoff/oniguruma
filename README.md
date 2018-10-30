@@ -1,17 +1,17 @@
+[![Build Status](https://travis-ci.org/kkos/oniguruma.svg?branch=master)](https://travis-ci.org/kkos/oniguruma)
+[![Code Quality: Cpp](https://img.shields.io/lgtm/grade/cpp/g/kkos/oniguruma.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/kkos/oniguruma/context:cpp)
+[![Total Alerts](https://img.shields.io/lgtm/alerts/g/kkos/oniguruma.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/kkos/oniguruma/alerts)
+
 Oniguruma
 =========
 
 https://github.com/kkos/oniguruma
 
-FIXED Security Issues:
---------------------------
-  **CVE-2017-9224, CVE-2017-9225, CVE-2017-9226**
-  **CVE-2017-9227, CVE-2017-9228, CVE-2017-9229**
+Oniguruma is a modern and flexible regular expressions library. It
+encompasses features from different regular expression implementations
+that traditionally exist in different languages.
 
-
-Oniguruma is a regular expressions library.
-The characteristics of this library is that different character encoding
-for every regular expression object can be specified.
+Character encoding can be specified per regular expression object.
 
 Supported character encodings:
 
@@ -26,19 +26,52 @@ Supported character encodings:
 * CP1251:  contributed by Byte
 
 
+New feature of version 6.9.0
+--------------------------
+
+* Update Unicode version 11.0.0
+* NEW: add Emoji properties
+
+
+New feature of version 6.8.2
+--------------------------
+
+* Fix: #80 UChar in header causes issue
+* NEW API: onig_set_callout_user_data_of_match_param()  (* omission in 6.8.0)
+* add doc/CALLOUTS.API and doc/CALLOUTS.API.ja
+
+
+New feature of version 6.8.1
+--------------------------
+
+* Update shared library version to 5.0.0 for API incompatible changes from 6.7.1
+
+
+New feature of version 6.8.0
+--------------------------
+
+* Retry-limit-in-match function enabled by default
+* NEW: configure option --enable-posix-api=no  (* enabled by default)
+* NEW API: onig_search_with_param(), onig_match_with_param()
+* NEW: Callouts of contents  (?{...contents...}) (?{...}\[tag]\[X<>]) (?{{...}})
+* NEW: Callouts of name      (*name) (*name\[tag]{args...})
+* NEW: Builtin callouts  (*FAIL) (*MISMATCH) (*ERROR{n}) (*COUNT) (*MAX{n}) etc..
+* Examples of Callouts program: [callout.c](sample/callout.c), [count.c](sample/count.c), [echo.c](sample/echo.c)
+
+
+New feature of version 6.7.1
+--------------------------
+
+* NEW: Mechanism of retry-limit-in-match (* disabled by default)
+
+
 New feature of version 6.7.0
 --------------------------
 
 * NEW: hexadecimal codepoint \uHHHH
 * NEW: add ONIG_SYNTAX_ONIGURUMA (== ONIG_SYNTAX_DEFAULT)
 * Disabled \N and \O on ONIG_SYNTAX_RUBY
-* Reduced object size
-
-
-New feature of version 6.6.1
---------------------------
-
-* Fix definition of \X
+* Reduced size of object file
 
 
 New feature of version 6.6.0
@@ -47,7 +80,7 @@ New feature of version 6.6.0
 * NEW: ASCII only mode options for character type/property (?WDSP)
 * NEW: Extended Grapheme Cluster boundary \y, \Y (*original)
 * NEW: Extended Grapheme Cluster \X
-* Range-clear (Absent-clear) operator restores previous range in backtrack.
+* Range-clear (Absent-clear) operator restores previous range in retractions.
 
 
 New feature of version 6.5.0
@@ -56,9 +89,9 @@ New feature of version 6.5.0
 * NEW: \K (keep)
 * NEW: \R (general newline) \N (no newline)
 * NEW: \O (true anychar)
-* NEW: if-then-else syntax   (?(...)...\|...)
+* NEW: if-then-else   (?(...)...\|...)
 * NEW: Backreference validity checker (?(xxx)) (*original)
-* NEW: Absent repeater (?~absent)
+* NEW: Absent repeater (?~absent)  \[is equal to (?\~\|absent|\O*)]
 * NEW: Absent expression   (?~|absent|expr)  (*original)
 * NEW: Absent stopper (?~|absent)     (*original)
 
@@ -75,6 +108,12 @@ New feature of version 6.3.0
 --------------------------
 
 * NEW: octal codepoint \o{.....}
+* Fixed CVE-2017-9224
+* Fixed CVE-2017-9225
+* Fixed CVE-2017-9226
+* Fixed CVE-2017-9227
+* Fixed CVE-2017-9228
+* Fixed CVE-2017-9229
 
 
 New feature of version 6.1.2
@@ -128,7 +167,7 @@ Install
 
 ### Case 2: Windows 64/32bit platform (Visual Studio)
 
-   execute make_win64 or make_win32
+   Execute make_win.bat
 
       onig_s.lib:  static link library
       onig.dll:    dynamic link library
@@ -156,7 +195,7 @@ Usage
   See doc/API for Oniguruma API.
 
   If you want to disable UChar type (== unsigned char) definition
-  in oniguruma.h, define ONIG_ESCAPE_UCHAR_COLLISION and then 
+  in oniguruma.h, define ONIG_ESCAPE_UCHAR_COLLISION and then
   include oniguruma.h.
 
   If you want to disable regex_t type definition in oniguruma.h,
@@ -186,6 +225,7 @@ Sample Programs
 |sample/scan.c         |example of using onig_scan().             |
 |sample/sql.c          |example of the variable meta characters.  |
 |sample/user_property.c|example of user defined Unicode property. |
+|sample/callout.c      |example of callouts.                      |
 
 
 Test Programs
@@ -256,5 +296,4 @@ Source Files
 |utf32_le.c         |UTF-32LE encoding                                       |
 |unicode.c          |common codes of Unicode encoding                        |
 |unicode_fold_data.c|Unicode folding data                                    |
-|win32/Makefile     |Makefile for Win32 (VC++)                               |
-|win32/config.h     |config.h for Win32                                      |
+|windows/testc.c    |Test program for Windows (VC++)                        |

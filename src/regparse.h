@@ -4,7 +4,7 @@
   regparse.h -  Oniguruma (regular expression library)
 **********************************************************************/
 /*-
- * Copyright (c) 2002-2017  K.Kosako  <sndgk393 AT ybb DOT ne DOT jp>
+ * Copyright (c) 2002-2018  K.Kosako  <sndgk393 AT ybb DOT ne DOT jp>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -51,26 +51,30 @@ enum GimmickType {
   GIMMICK_KEEP = 1,
   GIMMICK_SAVE = 2,
   GIMMICK_UPDATE_VAR = 3,
+#ifdef USE_CALLOUT
+  GIMMICK_CALLOUT = 4,
+#endif
 };
+
 
 /* node type bit */
 #define NODE_TYPE2BIT(type)      (1<<(type))
 
-#define BIT_NODE_STRING     NODE_TYPE2BIT(NODE_STRING)
-#define BIT_NODE_CCLASS     NODE_TYPE2BIT(NODE_CCLASS)
-#define BIT_NODE_CTYPE      NODE_TYPE2BIT(NODE_CTYPE)
-#define BIT_NODE_BACKREF    NODE_TYPE2BIT(NODE_BACKREF)
-#define BIT_NODE_QUANT      NODE_TYPE2BIT(NODE_QUANT)
-#define BIT_NODE_ENCLOSURE  NODE_TYPE2BIT(NODE_ENCLOSURE)
-#define BIT_NODE_ANCHOR     NODE_TYPE2BIT(NODE_ANCHOR)
-#define BIT_NODE_LIST       NODE_TYPE2BIT(NODE_LIST)
-#define BIT_NODE_ALT        NODE_TYPE2BIT(NODE_ALT)
-#define BIT_NODE_CALL       NODE_TYPE2BIT(NODE_CALL)
-#define BIT_NODE_GIMMICK    NODE_TYPE2BIT(NODE_GIMMICK)
+#define NODE_BIT_STRING     NODE_TYPE2BIT(NODE_STRING)
+#define NODE_BIT_CCLASS     NODE_TYPE2BIT(NODE_CCLASS)
+#define NODE_BIT_CTYPE      NODE_TYPE2BIT(NODE_CTYPE)
+#define NODE_BIT_BACKREF    NODE_TYPE2BIT(NODE_BACKREF)
+#define NODE_BIT_QUANT      NODE_TYPE2BIT(NODE_QUANT)
+#define NODE_BIT_ENCLOSURE  NODE_TYPE2BIT(NODE_ENCLOSURE)
+#define NODE_BIT_ANCHOR     NODE_TYPE2BIT(NODE_ANCHOR)
+#define NODE_BIT_LIST       NODE_TYPE2BIT(NODE_LIST)
+#define NODE_BIT_ALT        NODE_TYPE2BIT(NODE_ALT)
+#define NODE_BIT_CALL       NODE_TYPE2BIT(NODE_CALL)
+#define NODE_BIT_GIMMICK    NODE_TYPE2BIT(NODE_GIMMICK)
 
 #define NODE_IS_SIMPLE_TYPE(node) \
   ((NODE_TYPE2BIT(NODE_TYPE(node)) & \
-    (BIT_NODE_STRING | BIT_NODE_CCLASS | BIT_NODE_CTYPE | BIT_NODE_BACKREF)) != 0)
+    (NODE_BIT_STRING | NODE_BIT_CCLASS | NODE_BIT_CTYPE | NODE_BIT_BACKREF)) != 0)
 
 #define NODE_TYPE(node)             ((node)->u.base.node_type)
 #define NODE_SET_TYPE(node, ntype)   (node)->u.base.node_type = (ntype)
@@ -97,7 +101,7 @@ enum GimmickType {
   (NODE_IS_FIXED_OPTION(node) ? CTYPE_(node)->options : reg->options)
 
 
-#define ANCHOR_ANYCHAR_STAR_MASK (ANCHOR_ANYCHAR_STAR | ANCHOR_ANYCHAR_STAR_ML)
+#define ANCHOR_ANYCHAR_INF_MASK  (ANCHOR_ANYCHAR_INF | ANCHOR_ANYCHAR_INF_ML)
 #define ANCHOR_END_BUF_MASK      (ANCHOR_END_BUF | ANCHOR_SEMI_END_BUF)
 
 enum EnclosureType {
@@ -111,20 +115,26 @@ enum EnclosureType {
 #define NODE_STRING_BUF_SIZE       24  /* sizeof(CClassNode) - sizeof(int)*4 */
 #define NODE_BACKREFS_SIZE       6
 
-#define STRING_RAW                (1<<0) /* by backslashed number */
-#define STRING_AMBIG              (1<<1)
-#define STRING_DONT_GET_OPT_INFO  (1<<2)
+#define NODE_STRING_RAW                (1<<0) /* by backslashed number */
+#define NODE_STRING_AMBIG              (1<<1)
+#define NODE_STRING_GOOD_AMBIG         (1<<2)
+#define NODE_STRING_DONT_GET_OPT_INFO  (1<<3)
 
 #define NODE_STRING_LEN(node)            (int )((node)->u.str.end - (node)->u.str.s)
-#define NODE_STRING_SET_RAW(node)          (node)->u.str.flag |= STRING_RAW
-#define NODE_STRING_CLEAR_RAW(node)        (node)->u.str.flag &= ~STRING_RAW
-#define NODE_STRING_SET_AMBIG(node)        (node)->u.str.flag |= STRING_AMBIG
+#define NODE_STRING_SET_RAW(node)        (node)->u.str.flag |= NODE_STRING_RAW
+#define NODE_STRING_CLEAR_RAW(node)      (node)->u.str.flag &= ~NODE_STRING_RAW
+#define NODE_STRING_SET_AMBIG(node)      (node)->u.str.flag |= NODE_STRING_AMBIG
+#define NODE_STRING_SET_GOOD_AMBIG(node) (node)->u.str.flag |= NODE_STRING_GOOD_AMBIG
 #define NODE_STRING_SET_DONT_GET_OPT_INFO(node) \
-  (node)->u.str.flag |= STRING_DONT_GET_OPT_INFO
-#define NODE_STRING_IS_RAW(node)          (((node)->u.str.flag & STRING_RAW)   != 0)
-#define NODE_STRING_IS_AMBIG(node)        (((node)->u.str.flag & STRING_AMBIG) != 0)
+  (node)->u.str.flag |= NODE_STRING_DONT_GET_OPT_INFO
+#define NODE_STRING_IS_RAW(node) \
+  (((node)->u.str.flag & NODE_STRING_RAW) != 0)
+#define NODE_STRING_IS_AMBIG(node) \
+  (((node)->u.str.flag & NODE_STRING_AMBIG) != 0)
+#define NODE_STRING_IS_GOOD_AMBIG(node) \
+  (((node)->u.str.flag & NODE_STRING_GOOD_AMBIG) != 0)
 #define NODE_STRING_IS_DONT_GET_OPT_INFO(node) \
-  (((node)->u.str.flag & STRING_DONT_GET_OPT_INFO) != 0)
+  (((node)->u.str.flag & NODE_STRING_DONT_GET_OPT_INFO) != 0)
 
 #define BACKREFS_P(br) \
   (IS_NOT_NULL((br)->back_dynamic) ? (br)->back_dynamic : (br)->back_static)
@@ -137,56 +147,56 @@ enum QuantBodyEmpty {
 };
 
 /* node status bits */
-#define NST_MIN_FIXED             (1<<0)
-#define NST_MAX_FIXED             (1<<1)
-#define NST_CLEN_FIXED            (1<<2)
-#define NST_MARK1                 (1<<3)
-#define NST_MARK2                 (1<<4)
-#define NST_STOP_BT_SIMPLE_REPEAT (1<<5)
-#define NST_RECURSION             (1<<6)
-#define NST_CALLED                (1<<7)
-#define NST_ADDR_FIXED            (1<<8)
-#define NST_NAMED_GROUP           (1<<9)
-#define NST_IN_REAL_REPEAT        (1<<10) /* STK_REPEAT is nested in stack. */
-#define NST_IN_ZERO_REPEAT        (1<<11) /* (....){0} */
-#define NST_IN_MULTI_ENTRY        (1<<12)
-#define NST_NEST_LEVEL            (1<<13)
-#define NST_BY_NUMBER             (1<<14) /* {n,m} */
-#define NST_BY_NAME               (1<<15) /* backref by name */
-#define NST_BACKREF               (1<<16)
-#define NST_CHECKER               (1<<17)
-#define NST_FIXED_OPTION          (1<<18)
-#define NST_PROHIBIT_RECURSION    (1<<19)
-#define NST_SUPER                 (1<<20)
+#define NODE_ST_MIN_FIXED             (1<<0)
+#define NODE_ST_MAX_FIXED             (1<<1)
+#define NODE_ST_CLEN_FIXED            (1<<2)
+#define NODE_ST_MARK1                 (1<<3)
+#define NODE_ST_MARK2                 (1<<4)
+#define NODE_ST_STOP_BT_SIMPLE_REPEAT (1<<5)
+#define NODE_ST_RECURSION             (1<<6)
+#define NODE_ST_CALLED                (1<<7)
+#define NODE_ST_ADDR_FIXED            (1<<8)
+#define NODE_ST_NAMED_GROUP           (1<<9)
+#define NODE_ST_IN_REAL_REPEAT        (1<<10) /* STK_REPEAT is nested in stack. */
+#define NODE_ST_IN_ZERO_REPEAT        (1<<11) /* (....){0} */
+#define NODE_ST_IN_MULTI_ENTRY        (1<<12)
+#define NODE_ST_NEST_LEVEL            (1<<13)
+#define NODE_ST_BY_NUMBER             (1<<14) /* {n,m} */
+#define NODE_ST_BY_NAME               (1<<15) /* backref by name */
+#define NODE_ST_BACKREF               (1<<16)
+#define NODE_ST_CHECKER               (1<<17)
+#define NODE_ST_FIXED_OPTION          (1<<18)
+#define NODE_ST_PROHIBIT_RECURSION    (1<<19)
+#define NODE_ST_SUPER                 (1<<20)
 
 
 #define NODE_STATUS(node)           (((Node* )node)->u.base.status)
-#define NODE_STATUS_ADD(node,f)     (NODE_STATUS(node) |= (f))
-#define NODE_STATUS_REMOVE(node,f)  (NODE_STATUS(node) &= ~(f))
+#define NODE_STATUS_ADD(node,f)     (NODE_STATUS(node) |= (NODE_ST_ ## f))
+#define NODE_STATUS_REMOVE(node,f)  (NODE_STATUS(node) &= ~(NODE_ST_ ## f))
 
-#define NODE_IS_BY_NUMBER(node)       ((NODE_STATUS(node) & NST_BY_NUMBER)      != 0)
-#define NODE_IS_IN_REAL_REPEAT(node)  ((NODE_STATUS(node) & NST_IN_REAL_REPEAT) != 0)
-#define NODE_IS_CALLED(node)          ((NODE_STATUS(node) & NST_CALLED)         != 0)
-#define NODE_IS_IN_MULTI_ENTRY(node)  ((NODE_STATUS(node) & NST_IN_MULTI_ENTRY) != 0)
-#define NODE_IS_RECURSION(node)       ((NODE_STATUS(node) & NST_RECURSION)      != 0)
-#define NODE_IS_IN_ZERO_REPEAT(node)  ((NODE_STATUS(node) & NST_IN_ZERO_REPEAT) != 0)
-#define NODE_IS_NAMED_GROUP(node)     ((NODE_STATUS(node) & NST_NAMED_GROUP)  != 0)
-#define NODE_IS_ADDR_FIXED(node)      ((NODE_STATUS(node) & NST_ADDR_FIXED)   != 0)
-#define NODE_IS_CLEN_FIXED(node)      ((NODE_STATUS(node) & NST_CLEN_FIXED)   != 0)
-#define NODE_IS_MIN_FIXED(node)       ((NODE_STATUS(node) & NST_MIN_FIXED)    != 0)
-#define NODE_IS_MAX_FIXED(node)       ((NODE_STATUS(node) & NST_MAX_FIXED)    != 0)
-#define NODE_IS_MARK1(node)           ((NODE_STATUS(node) & NST_MARK1)        != 0)
-#define NODE_IS_MARK2(node)           ((NODE_STATUS(node) & NST_MARK2)        != 0)
-#define NODE_IS_NEST_LEVEL(node)      ((NODE_STATUS(node) & NST_NEST_LEVEL)   != 0)
-#define NODE_IS_BY_NAME(node)         ((NODE_STATUS(node) & NST_BY_NAME)      != 0)
-#define NODE_IS_BACKREF(node)         ((NODE_STATUS(node) & NST_BACKREF)      != 0)
-#define NODE_IS_CHECKER(node)         ((NODE_STATUS(node) & NST_CHECKER)      != 0)
-#define NODE_IS_FIXED_OPTION(node)    ((NODE_STATUS(node) & NST_FIXED_OPTION) != 0)
-#define NODE_IS_SUPER(node)           ((NODE_STATUS(node) & NST_SUPER)        != 0)
+#define NODE_IS_BY_NUMBER(node)       ((NODE_STATUS(node) & NODE_ST_BY_NUMBER)      != 0)
+#define NODE_IS_IN_REAL_REPEAT(node)  ((NODE_STATUS(node) & NODE_ST_IN_REAL_REPEAT) != 0)
+#define NODE_IS_CALLED(node)          ((NODE_STATUS(node) & NODE_ST_CALLED)         != 0)
+#define NODE_IS_IN_MULTI_ENTRY(node)  ((NODE_STATUS(node) & NODE_ST_IN_MULTI_ENTRY) != 0)
+#define NODE_IS_RECURSION(node)       ((NODE_STATUS(node) & NODE_ST_RECURSION)      != 0)
+#define NODE_IS_IN_ZERO_REPEAT(node)  ((NODE_STATUS(node) & NODE_ST_IN_ZERO_REPEAT) != 0)
+#define NODE_IS_NAMED_GROUP(node)     ((NODE_STATUS(node) & NODE_ST_NAMED_GROUP)  != 0)
+#define NODE_IS_ADDR_FIXED(node)      ((NODE_STATUS(node) & NODE_ST_ADDR_FIXED)   != 0)
+#define NODE_IS_CLEN_FIXED(node)      ((NODE_STATUS(node) & NODE_ST_CLEN_FIXED)   != 0)
+#define NODE_IS_MIN_FIXED(node)       ((NODE_STATUS(node) & NODE_ST_MIN_FIXED)    != 0)
+#define NODE_IS_MAX_FIXED(node)       ((NODE_STATUS(node) & NODE_ST_MAX_FIXED)    != 0)
+#define NODE_IS_MARK1(node)           ((NODE_STATUS(node) & NODE_ST_MARK1)        != 0)
+#define NODE_IS_MARK2(node)           ((NODE_STATUS(node) & NODE_ST_MARK2)        != 0)
+#define NODE_IS_NEST_LEVEL(node)      ((NODE_STATUS(node) & NODE_ST_NEST_LEVEL)   != 0)
+#define NODE_IS_BY_NAME(node)         ((NODE_STATUS(node) & NODE_ST_BY_NAME)      != 0)
+#define NODE_IS_BACKREF(node)         ((NODE_STATUS(node) & NODE_ST_BACKREF)      != 0)
+#define NODE_IS_CHECKER(node)         ((NODE_STATUS(node) & NODE_ST_CHECKER)      != 0)
+#define NODE_IS_FIXED_OPTION(node)    ((NODE_STATUS(node) & NODE_ST_FIXED_OPTION) != 0)
+#define NODE_IS_SUPER(node)           ((NODE_STATUS(node) & NODE_ST_SUPER)        != 0)
 #define NODE_IS_PROHIBIT_RECURSION(node) \
-    ((NODE_STATUS(node) & NST_PROHIBIT_RECURSION) != 0)
+    ((NODE_STATUS(node) & NODE_ST_PROHIBIT_RECURSION) != 0)
 #define NODE_IS_STOP_BT_SIMPLE_REPEAT(node) \
-    ((NODE_STATUS(node) & NST_STOP_BT_SIMPLE_REPEAT) != 0)
+    ((NODE_STATUS(node) & NODE_ST_STOP_BT_SIMPLE_REPEAT) != 0)
 
 #define NODE_BODY(node)           ((node)->u.base.body)
 #define NODE_QUANT_BODY(node)      ((node)->body)
@@ -227,9 +237,6 @@ typedef struct {
   struct _Node* head_exact;
   struct _Node* next_head_exact;
   int is_refered;     /* include called node. don't eliminate even if {0} */
-#ifdef USE_COMBINATION_EXPLOSION_CHECK
-  int comb_exp_check_num;  /* 1,2,3...: check,  0: no check  */
-#endif
 } QuantNode;
 
 typedef struct {
@@ -332,6 +339,7 @@ typedef struct {
 
   enum GimmickType type;
   int  detail_type;
+  int  num;
   int  id;
 } GimmickNode;
 
@@ -400,15 +408,9 @@ typedef struct {
   int              num_mem;
   int              num_named;
   int              mem_alloc;
-  MemEnv            mem_env_static[SCANENV_MEMENV_SIZE];
-  MemEnv*           mem_env_dynamic;
-#ifdef USE_COMBINATION_EXPLOSION_CHECK
-  int num_comb_exp_check;
-  int comb_exp_max_regnum;
-  int curr_max_regnum;
-  int has_recursion;
-#endif
-  unsigned int parse_depth;
+  MemEnv           mem_env_static[SCANENV_MEMENV_SIZE];
+  MemEnv*          mem_env_dynamic;
+  unsigned int     parse_depth;
 
   int keep_num;
   int save_num;
@@ -448,6 +450,10 @@ extern int    onig_parse_tree P_((Node** root, const UChar* pattern, const UChar
 extern int    onig_free_shared_cclass_table P_((void));
 extern int    onig_is_code_in_cc P_((OnigEncoding enc, OnigCodePoint code, CClassNode* cc));
 extern OnigLen onig_get_tiny_min_len(Node* node, unsigned int inhibit_node_types, int* invalid_node);
+
+#ifdef USE_CALLOUT
+extern int onig_global_callout_names_free(void);
+#endif
 
 #ifdef ONIG_DEBUG
 extern int onig_print_names(FILE*, regex_t*);

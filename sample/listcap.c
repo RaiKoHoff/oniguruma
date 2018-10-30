@@ -36,7 +36,7 @@ extern int ex(unsigned char* str, unsigned char* pattern,
 	       ONIG_OPTION_DEFAULT, ONIG_ENCODING_ASCII, syntax, &einfo);
   if (r != ONIG_NORMAL) {
     char s[ONIG_MAX_ERROR_MESSAGE_LEN];
-    onig_error_code_to_str(s, r, &einfo);
+    onig_error_code_to_str((UChar* )s, r, &einfo);
     fprintf(stderr, "ERROR: %s\n", s);
     return -1;
   }
@@ -68,7 +68,7 @@ extern int ex(unsigned char* str, unsigned char* pattern,
   }
   else { /* error */
     char s[ONIG_MAX_ERROR_MESSAGE_LEN];
-    onig_error_code_to_str(s, r);
+    onig_error_code_to_str((UChar* )s, r);
     return -1;
   }
 
@@ -98,7 +98,7 @@ extern int main(int argc, char* argv[])
 
  /* enable capture hostory */
   onig_copy_syntax(&syn, ONIG_SYNTAX_DEFAULT);
-  onig_set_syntax_op2(&syn, 
+  onig_set_syntax_op2(&syn,
        onig_get_syntax_op2(&syn) | ONIG_SYN_OP2_ATMARK_CAPTURE_HISTORY);
 
   r = ex(str1, pattern1, &syn);

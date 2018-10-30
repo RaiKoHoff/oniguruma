@@ -2,7 +2,7 @@
   euc_jp.c -  Oniguruma (regular expression library)
 **********************************************************************/
 /*-
- * Copyright (c) 2002-2017  K.Kosako  <sndgk393 AT ybb DOT ne DOT jp>
+ * Copyright (c) 2002-2018  K.Kosako  <sndgk393 AT ybb DOT ne DOT jp>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -151,7 +151,7 @@ code_to_mbc(OnigCodePoint code, UChar *buf)
 #if 1
   if (enclen(ONIG_ENCODING_EUC_JP, buf) != (p - buf))
     return ONIGERR_INVALID_CODE_POINT_VALUE;
-#endif  
+#endif
   return (int )(p - buf);
 }
 
@@ -236,7 +236,7 @@ property_name_to_ctype(OnigEncoding enc, UChar* p, UChar* end)
   if (len < sizeof(q) - 1) {
     xmemcpy(q, p, (size_t )len);
     q[len] = '\0';
-    pc = euc_jp_lookup_property_name(q, len);
+    pc = onigenc_euc_jp_lookup_property_name(q, len);
     if (pc != 0)
       return pc->ctype;
   }
@@ -306,5 +306,7 @@ OnigEncodingType OnigEncodingEUC_JP = {
   is_allowed_reverse_match,
   NULL, /* init */
   NULL, /* is_initialized */
-  is_valid_mbc_string
+  is_valid_mbc_string,
+  ENC_FLAG_ASCII_COMPATIBLE|ENC_FLAG_SKIP_OFFSET_1_OR_0,
+  0, 0
 };

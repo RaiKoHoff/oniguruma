@@ -2,7 +2,7 @@
   sjis.c -  Oniguruma (regular expression library)
 **********************************************************************/
 /*-
- * Copyright (c) 2002-2017  K.Kosako  <sndgk393 AT ybb DOT ne DOT jp>
+ * Copyright (c) 2002-2018  K.Kosako  <sndgk393 AT ybb DOT ne DOT jp>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -113,10 +113,7 @@ static int
 code_to_mbclen(OnigCodePoint code)
 {
   if (code < 256) {
-    if (EncLen_SJIS[(int )code] == 1)
-      return 1;
-    else
-      return 0;
+    return EncLen_SJIS[(int )code] == 1;
   }
   else if (code <= 0xffff) {
     return 2;
@@ -188,7 +185,7 @@ is_mbc_ambiguous(OnigCaseFoldType flag,
 		 const UChar** pp, const UChar* end)
 {
   return onigenc_mbn_is_mbc_ambiguous(ONIG_ENCODING_SJIS, flag, pp, end);
-                                      
+
 }
 #endif
 
@@ -223,7 +220,7 @@ left_adjust_char_head(const UChar* start, const UChar* s)
 	p++;
 	break;
       }
-    } 
+    }
   }
   len = enclen(ONIG_ENCODING_SJIS, p);
   if (p + len > s) return (UChar* )p;
@@ -268,7 +265,7 @@ property_name_to_ctype(OnigEncoding enc, UChar* p, UChar* end)
   if (len < sizeof(q) - 1) {
     xmemcpy(q, p, (size_t )len);
     q[len] = '\0';
-    pc = euc_jp_lookup_property_name(q, len);
+    pc = onigenc_sjis_lookup_property_name(q, len);
     if (pc != 0)
       return pc->ctype;
   }
@@ -321,8 +318,8 @@ get_ctype_code_range(OnigCtype ctype, OnigCodePoint* sb_out,
 OnigEncodingType OnigEncodingSJIS = {
   mbc_enc_len,
   "Shift_JIS",   /* name */
-  2,             /* max byte length */
-  1,             /* min byte length */
+  2,             /* max enc length */
+  1,             /* min enc length */
   onigenc_is_mbc_newline_0x0a,
   mbc_to_code,
   code_to_mbclen,
@@ -337,5 +334,7 @@ OnigEncodingType OnigEncodingSJIS = {
   is_allowed_reverse_match,
   NULL, /* init */
   NULL, /* is_initialized */
-  is_valid_mbc_string
+  is_valid_mbc_string,
+  ENC_FLAG_ASCII_COMPATIBLE|ENC_FLAG_SKIP_OFFSET_1_OR_0,
+  0, 0
 };

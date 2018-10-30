@@ -9,11 +9,7 @@
 
 #include "oniguruma.h"
 
-#ifdef HAVE_STRING_H
-# include <string.h>
-#else
-# include <strings.h>
-#endif
+#include <string.h>
 
 #define SLEN(s)  strlen(s)
 
@@ -276,7 +272,33 @@ extern int main(int argc, char* argv[])
   x2("(?i:a)", "a", 0, 1);
   x2("(?i:a)", "A", 0, 1);
   x2("(?i:A)", "a", 0, 1);
+  x2("(?i:i)", "I", 0, 1);
+  x2("(?i:I)", "i", 0, 1);
+  x2("(?i:[A-Z])", "i", 0, 1);
+  x2("(?i:[a-z])", "I", 0, 1);
   n("(?i:A)", "b");
+  x2("(?i:ss)", "ss", 0, 2);
+  x2("(?i:ss)", "Ss", 0, 2);
+  x2("(?i:ss)", "SS", 0, 2);
+  /* 0xc5,0xbf == 017F: # LATIN SMALL LETTER LONG S */
+  x2("(?i:ss)", "\xc5\xbfS", 0, 3);
+  x2("(?i:ss)", "s\xc5\xbf", 0, 3);
+  /* 0xc3,0x9f == 00DF: # LATIN SMALL LETTER SHARP S */
+  x2("(?i:ss)", "\xc3\x9f", 0, 2);
+  /* 0xe1,0xba,0x9e == 1E9E # LATIN CAPITAL LETTER SHARP S */
+  x2("(?i:ss)", "\xe1\xba\x9e", 0, 3);
+  x2("(?i:xssy)", "xssy", 0, 4);
+  x2("(?i:xssy)", "xSsy", 0, 4);
+  x2("(?i:xssy)", "xSSy", 0, 4);
+  x2("(?i:xssy)", "x\xc5\xbfSy", 0, 5);
+  x2("(?i:xssy)", "xs\xc5\xbfy", 0, 5);
+  x2("(?i:xssy)", "x\xc3\x9fy", 0, 4);
+  x2("(?i:xssy)", "x\xe1\xba\x9ey", 0, 5);
+  x2("(?i:\xc3\x9f)", "ss", 0, 2);
+  x2("(?i:\xc3\x9f)", "SS", 0, 2);
+  x2("(?i:[\xc3\x9f])", "ss", 0, 2);
+  x2("(?i:[\xc3\x9f])", "SS", 0, 2);
+  x2("(?i)(?<!ss)z", "qqz", 2, 3);
   x2("(?i:[A-Z])", "a", 0, 1);
   x2("(?i:[f-m])", "H", 0, 1);
   x2("(?i:[f-m])", "h", 0, 1);
@@ -295,6 +317,7 @@ extern int main(int argc, char* argv[])
   x2("(?m:a.)", "a\n", 0, 2);
   x2("(?m:.b)", "a\nb", 1, 3);
   x2(".*abc", "dddabdd\nddabc", 8, 13);
+  x2(".+abc", "dddabdd\nddabcaa\naaaabc", 8, 13);
   x2("(?m:.*abc)", "dddabddabc", 0, 10);
   n("(?i)(?-i)a", "A");
   n("(?i)(?-i:a)", "A");
@@ -393,6 +416,10 @@ extern int main(int argc, char* argv[])
   x2("a|(?i)c", "C", 0, 1);
   x2("(?i)c|a", "C", 0, 1);
   x2("(?i)c|a", "A", 0, 1);
+  x2("a(?i)b|c", "aB", 0, 2);
+  x2("a(?i)b|c", "aC", 0, 2);
+  n("a(?i)b|c", "AC");
+  n("a(?:(?i)b)|c", "aC");
   x2("(?i:c)|a", "C", 0, 1);
   n("(?i:c)|a", "A");
   x2("[abc]?", "abc", 0, 1);
@@ -594,6 +621,10 @@ extern int main(int argc, char* argv[])
   x2("a\\Kb", "ab", 1, 2);
   x2("(a\\Kb|ac\\Kd)", "acd", 2, 3);
   x2("(a\\Kb|\\Kac\\K)*", "acababacab", 9, 10);
+  x2("(?:()|())*\\1", "abc", 0, 0);
+  x2("(?:()|())*\\2", "abc", 0, 0);
+  x2("(?:()|()|())*\\3\\1", "abc", 0, 0);
+  x2("(|(?:a(?:\\g'1')*))b|", "abc", 0, 2);
 
   x2("(?~)", "", 0, 0);
   x2("(?~)", "A", 0, 0);
@@ -928,6 +959,10 @@ extern int main(int argc, char* argv[])
 
   x2("\\p{Hiragana}", "ぴ", 0, 3);
   n("\\P{Hiragana}", "ぴ");
+  x2("\\p{Emoji}", "\xE2\xAD\x90", 0, 3);
+  x2("\\p{^Emoji}", "\xEF\xBC\x93", 0, 3);
+  x2("\\p{Extended_Pictographic}", "\xE2\x9A\xA1", 0, 3);
+  n("\\p{Extended_Pictographic}", "\xE3\x81\x82");
 
   x2("\\p{Word}", "こ", 0, 3);
   n("\\p{^Word}", "こ");
@@ -1030,6 +1065,11 @@ extern int main(int argc, char* argv[])
   x2(".\\Y.", "\xE0\xA4\xB7\xE0\xA4\xBF", 0, 6);
   n(".\\y.", "\xE0\xA4\xB7\xE0\xA4\xBF");
 
+  // {Extended_Pictographic} Extend* ZWJ x {Extended_Pictographic}
+  x2("..\\Y.", "\xE3\x80\xB0\xE2\x80\x8D\xE2\xAD\x95", 0, 9);
+  x2("...\\Y.", "\xE3\x80\xB0\xCC\x82\xE2\x80\x8D\xE2\xAD\x95", 0, 11);
+  n("...\\Y.", "\xE3\x80\xB0\xCD\xB0\xE2\x80\x8D\xE2\xAD\x95");
+
   // CR + LF
   n("^\\X\\X$", "\x0d\x0a");
   x2("^\\X$", "\x0d\x0a", 0, 2);
@@ -1064,9 +1104,19 @@ extern int main(int argc, char* argv[])
   x2("c.*\\b", "abc", 2, 3);
   x2("\\b.*abc.*\\b", "abc", 0, 3);
 
+  n("(*FAIL)", "abcdefg");
+  n("abcd(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)(*FAIL)", "abcdefg");
+  x2("(?:[ab]|(*MAX{2}).)*", "abcbaaccaaa", 0, 7);
+  x2("(?:(*COUNT[AB]{X})[ab]|(*COUNT[CD]{X})[cd])*(*CMP{AB,<,CD})",
+     "abababcdab", 5, 8);
+  x2("(?(?{....})123|456)", "123", 0, 3);
+  x2("(?(*FAIL)123|456)", "456", 0, 3);
+
+
   e("\\u040", "@", ONIGERR_INVALID_CODE_POINT_VALUE);
   e("(?<abc>\\g<abc>)", "zzzz", ONIGERR_NEVER_ENDING_RECURSION);
   e("(?<=(?>abc))", "abc", ONIGERR_INVALID_LOOK_BEHIND_PATTERN);
+  e("(*FOO)", "abcdefg", ONIGERR_UNDEFINED_CALLOUT_NAME);
 
   fprintf(stdout,
        "\nRESULT   SUCC: %d,  FAIL: %d,  ERROR: %d      (by Oniguruma %s)\n",

@@ -4,13 +4,25 @@ libname = libonig.la
 AM_CFLAGS = -Wall
 AM_CPPFLAGS = -I$(top_srcdir) -I$(includedir)
 
-include_HEADERS = oniguruma.h oniggnu.h onigposix.h
+include_HEADERS = oniguruma.h oniggnu.h
+
+posix_headers = onigposix.h
+
+if ENABLE_POSIX_API
+posix_sources = regposix.c regposerr.c
+include_HEADERS += $(posix_headers)
+else
+posix_sources =
+endif
+
+
 lib_LTLIBRARIES = $(libname)
 
 libonig_la_SOURCES = regint.h regparse.h regenc.h st.h \
-	regerror.c regparse.c regext.c regcomp.c regexec.c reggnu.c \
-	regenc.c regsyntax.c regtrav.c regversion.c st.c \
-	regposix.c regposerr.c \
+	regparse.c regcomp.c regexec.c \
+	regenc.c regerror.c regext.c regsyntax.c regtrav.c regversion.c st.c \
+	reggnu.c \
+  $(posix_sources) \
 	unicode.c \
 	unicode_unfold_key.c \
 	unicode_fold1_key.c \
@@ -42,12 +54,8 @@ EXTRA_DIST = koi8.c mktable.c \
 	make_unicode_egcb.sh make_unicode_egcb_data.py \
 	make_unicode_fold.sh make_unicode_fold_data.py \
 	make_unicode_property.sh make_unicode_property_data.py \
-	gperf_fold_key_conv.py gperf_unfold_key_conv.py \
-	unicode-7.0/unicode_fold1_key.c unicode-7.0/unicode_fold2_key.c \
-	unicode-7.0/unicode_fold3_key.c unicode-7.0/unicode_fold_data.c \
-	unicode-7.0/unicode_property_data.c \
-	unicode-7.0/unicode_property_data_posix.c \
-	unicode-7.0/unicode_unfold_key.c
+	make_property.sh \
+	gperf_fold_key_conv.py gperf_unfold_key_conv.py
 
 dll:
 	$(CXX) -shared -Wl,--output-def,libonig.def -o libonig.dll *.o \

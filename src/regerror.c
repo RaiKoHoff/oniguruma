@@ -2,7 +2,7 @@
   regerror.c -  Oniguruma (regular expression library)
 **********************************************************************/
 /*-
- * Copyright (c) 2002-2017  K.Kosako  <sndgk393 AT ybb DOT ne DOT jp>
+ * Copyright (c) 2002-2018  K.Kosako  <sndgk393 AT ybb DOT ne DOT jp>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,32 +30,28 @@
 #include "regint.h"
 #include <stdio.h> /* for vsnprintf() */
 
-#ifdef HAVE_STDARG_PROTOTYPES
 #include <stdarg.h>
-#define va_init_list(a,b) va_start(a,b)
-#else
-#include <varargs.h>
-#define va_init_list(a,b) va_start(a)
-#endif
 
 extern UChar*
 onig_error_code_to_format(int code)
 {
   char *p;
 
-  if (code >= 0) return (UChar* )0;
-
   switch (code) {
   case ONIG_MISMATCH:
     p = "mismatch"; break;
   case ONIG_NO_SUPPORT_CONFIG:
     p = "no support in this configuration"; break;
+  case ONIG_ABORT:
+    p = "abort"; break;
   case ONIGERR_MEMORY:
     p = "fail to memory allocation"; break;
   case ONIGERR_MATCH_STACK_LIMIT_OVER:
     p = "match-stack limit over"; break;
   case ONIGERR_PARSE_DEPTH_LIMIT_OVER:
     p = "parse depth limit over"; break;
+  case ONIGERR_RETRY_LIMIT_IN_MATCH_OVER:
+    p = "retry-limit-in-match over"; break;
   case ONIGERR_TYPE_BUG:
     p = "undefined type (bug)"; break;
   case ONIGERR_PARSER_BUG:
@@ -172,6 +168,18 @@ onig_error_code_to_format(int code)
     p = "invalid absent group pattern"; break;
   case ONIGERR_INVALID_ABSENT_GROUP_GENERATOR_PATTERN:
     p = "invalid absent group generator pattern"; break;
+  case ONIGERR_INVALID_CALLOUT_PATTERN:
+    p = "invalid callout pattern"; break;
+  case ONIGERR_INVALID_CALLOUT_NAME:
+    p = "invalid callout name"; break;
+  case ONIGERR_UNDEFINED_CALLOUT_NAME:
+    p = "undefined callout name"; break;
+  case ONIGERR_INVALID_CALLOUT_BODY:
+    p = "invalid callout body"; break;
+  case ONIGERR_INVALID_CALLOUT_TAG_NAME:
+    p = "invalid callout tag name"; break;
+  case ONIGERR_INVALID_CALLOUT_ARG:
+    p = "invalid callout arg"; break;
   case ONIGERR_NOT_SUPPORTED_ENCODING_COMBINATION:
     p = "not supported encoding combination"; break;
   case ONIGERR_INVALID_COMBINATION_OF_OPTIONS:
@@ -233,7 +241,7 @@ static int to_ascii(OnigEncoding enc, UChar *s, UChar *end,
       if (len >= buf_size) break;
     }
 
-    *is_over = ((p < end) ? 1 : 0);
+    *is_over = p < end;
   }
   else {
     len = MIN((int )(end - s), buf_size);
@@ -248,15 +256,7 @@ static int to_ascii(OnigEncoding enc, UChar *s, UChar *end,
 /* for ONIG_MAX_ERROR_MESSAGE_LEN */
 #define MAX_ERROR_PAR_LEN   30
 
-extern int
-#ifdef HAVE_STDARG_PROTOTYPES
-onig_error_code_to_str(UChar* s, int code, ...)
-#else
-onig_error_code_to_str(s, code, va_alist)
-  UChar* s;
-  int code;
-  va_dcl 
-#endif
+extern int onig_error_code_to_str(UChar* s, int code, ...)
 {
   UChar *p, *q;
   OnigErrorInfo* einfo;
@@ -264,7 +264,7 @@ onig_error_code_to_str(s, code, va_alist)
   UChar parbuf[MAX_ERROR_PAR_LEN];
   va_list vargs;
 
-  va_init_list(vargs, code);
+  va_start(vargs, code);
 
   switch (code) {
   case ONIGERR_UNDEFINED_NAME_REFERENCE:
@@ -316,27 +316,15 @@ onig_error_code_to_str(s, code, va_alist)
 }
 
 
-void
-#ifdef HAVE_STDARG_PROTOTYPES
-onig_snprintf_with_pattern(UChar buf[], int bufsize, OnigEncoding enc,
-                           UChar* pat, UChar* pat_end, const UChar *fmt, ...)
-#else
-onig_snprintf_with_pattern(buf, bufsize, enc, pat, pat_end, fmt, va_alist)
-    UChar buf[];
-    int bufsize;
-    OnigEncoding enc;
-    UChar* pat;
-    UChar* pat_end;
-    const UChar *fmt;
-    va_dcl
-#endif
+void onig_snprintf_with_pattern(UChar buf[], int bufsize, OnigEncoding enc,
+                                UChar* pat, UChar* pat_end, const UChar *fmt, ...)
 {
   int n, need, len;
   UChar *p, *s, *bp;
   UChar bs[6];
   va_list args;
 
-  va_init_list(args, fmt);
+  va_start(args, fmt);
   n = xvsnprintf((char* )buf, bufsize, (const char* )fmt, args);
   va_end(args);
 
