@@ -62,13 +62,18 @@
 #define USE_INSISTENT_CHECK_CAPTURES_IN_EMPTY_REPEAT    /* /(?:()|())*\2/ */
 #define USE_NEWLINE_AT_END_OF_STRING_HAS_EMPTY_LINE     /* /\n$/ =~ "\n" */
 #define USE_WARNING_REDUNDANT_NESTED_REPEAT_OPERATOR
-
 #define USE_RETRY_LIMIT_IN_MATCH
 
 /* internal config */
 #define USE_OP_PUSH_OR_JUMP_EXACT
 #define USE_QUANT_PEEK_NEXT
 #define USE_ST_LIBRARY
+
+#define USE_WORD_BEGIN_END        /* "\<", "\>" */
+#define USE_CAPTURE_HISTORY
+#define USE_VARIABLE_META_CHARS
+#define USE_POSIX_API_REGION_OPTION
+#define USE_FIND_LONGEST_SEARCH_ALL_OF_RANGE
 
 #include "regenc.h"
 
@@ -82,12 +87,6 @@
 #ifdef ONIG_ESCAPE_UCHAR_COLLISION
 #undef ONIG_ESCAPE_UCHAR_COLLISION
 #endif
-
-#define USE_WORD_BEGIN_END        /* "\<", "\>" */
-#define USE_CAPTURE_HISTORY
-#define USE_VARIABLE_META_CHARS
-#define USE_POSIX_API_REGION_OPTION
-#define USE_FIND_LONGEST_SEARCH_ALL_OF_RANGE
 
 #define xmalloc     malloc
 #define xrealloc    realloc
@@ -506,32 +505,32 @@ typedef struct _BBuf {
 
 
 /* has body */
-#define ANCHOR_PREC_READ        (1<<0)
-#define ANCHOR_PREC_READ_NOT    (1<<1)
-#define ANCHOR_LOOK_BEHIND      (1<<2)
-#define ANCHOR_LOOK_BEHIND_NOT  (1<<3)
+#define ANCR_PREC_READ        (1<<0)
+#define ANCR_PREC_READ_NOT    (1<<1)
+#define ANCR_LOOK_BEHIND      (1<<2)
+#define ANCR_LOOK_BEHIND_NOT  (1<<3)
 /* no body */
-#define ANCHOR_BEGIN_BUF        (1<<4)
-#define ANCHOR_BEGIN_LINE       (1<<5)
-#define ANCHOR_BEGIN_POSITION   (1<<6)
-#define ANCHOR_END_BUF          (1<<7)
-#define ANCHOR_SEMI_END_BUF     (1<<8)
-#define ANCHOR_END_LINE         (1<<9)
-#define ANCHOR_WORD_BOUNDARY    (1<<10)
-#define ANCHOR_NO_WORD_BOUNDARY (1<<11)
-#define ANCHOR_WORD_BEGIN       (1<<12)
-#define ANCHOR_WORD_END         (1<<13)
-#define ANCHOR_ANYCHAR_INF      (1<<14)
-#define ANCHOR_ANYCHAR_INF_ML   (1<<15)
-#define ANCHOR_EXTENDED_GRAPHEME_CLUSTER_BOUNDARY    (1<<16)
-#define ANCHOR_NO_EXTENDED_GRAPHEME_CLUSTER_BOUNDARY (1<<17)
+#define ANCR_BEGIN_BUF        (1<<4)
+#define ANCR_BEGIN_LINE       (1<<5)
+#define ANCR_BEGIN_POSITION   (1<<6)
+#define ANCR_END_BUF          (1<<7)
+#define ANCR_SEMI_END_BUF     (1<<8)
+#define ANCR_END_LINE         (1<<9)
+#define ANCR_WORD_BOUNDARY    (1<<10)
+#define ANCR_NO_WORD_BOUNDARY (1<<11)
+#define ANCR_WORD_BEGIN       (1<<12)
+#define ANCR_WORD_END         (1<<13)
+#define ANCR_ANYCHAR_INF      (1<<14)
+#define ANCR_ANYCHAR_INF_ML   (1<<15)
+#define ANCR_EXTENDED_GRAPHEME_CLUSTER_BOUNDARY    (1<<16)
+#define ANCR_NO_EXTENDED_GRAPHEME_CLUSTER_BOUNDARY (1<<17)
 
 
-#define ANCHOR_HAS_BODY(a)      ((a)->type < ANCHOR_BEGIN_BUF)
+#define ANCHOR_HAS_BODY(a)      ((a)->type < ANCR_BEGIN_BUF)
 
 #define IS_WORD_ANCHOR_TYPE(type) \
-  ((type) == ANCHOR_WORD_BOUNDARY || (type) == ANCHOR_NO_WORD_BOUNDARY || \
-   (type) == ANCHOR_WORD_BEGIN || (type) == ANCHOR_WORD_END)
+  ((type) == ANCR_WORD_BOUNDARY || (type) == ANCR_NO_WORD_BOUNDARY || \
+   (type) == ANCR_WORD_BEGIN || (type) == ANCR_WORD_END)
 
 /* operation code */
 enum OpCode {
