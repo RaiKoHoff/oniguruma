@@ -2,8 +2,8 @@
   gb18030.c -  Oniguruma (regular expression library)
 **********************************************************************/
 /*-
- * Copyright (c) 2005-2018  KUBO Takehiro <kubo AT jiubao DOT org>
- *                          K.Kosako <sndgk393 AT ybb DOT ne DOT jp>
+ * Copyright (c) 2005-2019  KUBO Takehiro <kubo AT jiubao DOT org>
+ *                          K.Kosako
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -67,11 +67,11 @@ gb18030_mbc_enc_len(const UChar* p)
 {
   if (GB18030_MAP[*p] != CM)
     return 1;
+
   p++;
   if (GB18030_MAP[*p] == C4)
     return 4;
-  if (GB18030_MAP[*p] == C1)
-    return 1; /* illegal sequence */
+
   return 2;
 }
 
@@ -134,15 +134,6 @@ gb18030_mbc_case_fold(OnigCaseFoldType flag, const UChar** pp, const UChar* end,
   return onigenc_mbn_mbc_case_fold(ONIG_ENCODING_GB18030, flag,
                                    pp, end, lower);
 }
-
-#if 0
-static int
-gb18030_is_mbc_ambiguous(OnigCaseFoldType flag,
-                         const UChar** pp, const UChar* end)
-{
-  return onigenc_mbn_is_mbc_ambiguous(ONIG_ENCODING_GB18030, flag, pp, end);
-}
-#endif
 
 static int
 gb18030_is_code_ctype(OnigCodePoint code, unsigned int ctype)

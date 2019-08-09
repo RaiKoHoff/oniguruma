@@ -7,6 +7,8 @@
 
 #include <stdlib.h>
 #include <string.h>
+
+#define DEFAULT_LIMIT 120
 typedef unsigned char uint8_t;
 
 static int
@@ -47,37 +49,6 @@ search(regex_t* reg, unsigned char* str, unsigned char* end)
   return 0;
 }
 
-static int
-exec(OnigEncoding enc, OnigOptionType options,
-     char* apattern, char* apattern_end, char* astr, char* astr_end)
-{
-  int r;
-  regex_t* reg;
-  OnigErrorInfo einfo;
-  UChar* pattern = (UChar* )apattern;
-  UChar* str     = (UChar* )astr;
-  UChar* pattern_end = (UChar* )apattern_end;
-  unsigned char *end = (unsigned char* )astr_end;
-
-  onig_initialize(&enc, 1);
-
-  r = onig_new(&reg, pattern, pattern_end,
-               options, enc, ONIG_SYNTAX_DEFAULT, &einfo);
-  if (r != ONIG_NORMAL) {
-    char s[ONIG_MAX_ERROR_MESSAGE_LEN];
-    onig_error_code_to_str((UChar* )s, r, &einfo);
-    fprintf(stdout, "ERROR: %s\n", s);
-    onig_end();
-    return -1;
-  }
-
-  r = search(reg, str, end);
-
-  onig_free(reg);
-  onig_end();
-  return 0;
-}
-
 static OnigCaseFoldType CF = ONIGENC_CASE_FOLD_MIN;
 
 static int
@@ -95,6 +66,8 @@ exec_deluxe(OnigEncoding pattern_enc, OnigEncoding str_enc,
   unsigned char* end = (unsigned char* )astr_end;
 
   onig_initialize(&str_enc, 1);
+  onig_set_retry_limit_in_match(DEFAULT_LIMIT);
+  onig_set_parse_depth_limit(DEFAULT_LIMIT);
 
   ci.num_of_elements = 5;
   ci.pattern_enc = pattern_enc;
@@ -213,3 +186,21 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
 
   return r;
 }
+
+
+#ifdef WITH_READ_MAIN
+
+#include <unistd.h>
+
+extern int main(int argc, char* argv[])
+{
+  size_t n;
+  uint8_t Data[10000];
+
+  n = read(0, Data, sizeof(Data));
+  fprintf(stdout, "n: %ld\n", n);
+  LLVMFuzzerTestOneInput(Data, n);
+
+  return 0;
+}
+#endif /* WITH_READ_MAIN */

@@ -2,7 +2,7 @@
   big5.c -  Oniguruma (regular expression library)
 **********************************************************************/
 /*-
- * Copyright (c) 2002-2018  K.Kosako  <sndgk393 AT ybb DOT ne DOT jp>
+ * Copyright (c) 2002-2019  K.Kosako
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -98,15 +98,6 @@ big5_mbc_case_fold(OnigCaseFoldType flag, const UChar** pp, const UChar* end,
   return onigenc_mbn_mbc_case_fold(ONIG_ENCODING_BIG5, flag,
                                    pp, end, lower);
 }
-
-#if 0
-static int
-big5_is_mbc_ambiguous(OnigCaseFoldType flag,
-                      const UChar** pp, const UChar* end)
-{
-  return onigenc_mbn_is_mbc_ambiguous(ONIG_ENCODING_BIG5, flag, pp, end);
-}
-#endif
 
 static int
 big5_is_code_ctype(OnigCodePoint code, unsigned int ctype)

@@ -7,6 +7,8 @@
 #include "oniguruma.h"
 
 #include <stdlib.h>
+
+#define DEFAULT_LIMIT 120
 typedef unsigned char uint8_t;
 
 extern int exec(OnigSyntaxType* syntax, char* apattern, char* astr)
@@ -90,6 +92,9 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
   OnigEncoding use_encs[] = { ONIG_ENCODING_ASCII };
   onig_initialize(use_encs, sizeof(use_encs)/sizeof(use_encs[0]));
 
+  onig_set_retry_limit_in_match(DEFAULT_LIMIT);
+  onig_set_parse_depth_limit(DEFAULT_LIMIT);
+
   OnigSyntaxType *syntaxes[] = {
     ONIG_SYNTAX_POSIX_EXTENDED,
     ONIG_SYNTAX_EMACS,
@@ -113,3 +118,20 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
 
   return 0;
 }
+
+#ifdef WITH_READ_MAIN
+
+#include <unistd.h>
+
+extern int main(int argc, char* argv[])
+{
+  size_t n;
+  uint8_t Data[10000];
+
+  n = read(0, Data, sizeof(Data));
+  fprintf(stdout, "n: %ld\n", n);
+  LLVMFuzzerTestOneInput(Data, n);
+
+  return 0;
+}
+#endif /* WITH_READ_MAIN */

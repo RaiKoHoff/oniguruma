@@ -7,6 +7,10 @@
 
 #include <stdlib.h>
 #include <string.h>
+
+#define PARSE_DEPTH_LIMIT   120
+#define RETRY_LIMIT        3500
+
 typedef unsigned char uint8_t;
 
 static int
@@ -49,10 +53,9 @@ search(regex_t* reg, unsigned char* str, unsigned char* end)
 
 static int
 exec(OnigEncoding enc, OnigOptionType options,
-     char* apattern, char* apattern_end, char* astr, char* str_null_end)
+     char* apattern, char* apattern_end, char* astr, UChar* end)
 {
   int r;
-  unsigned char *end;
   regex_t* reg;
   OnigErrorInfo einfo;
   UChar* pattern = (UChar* )apattern;
@@ -60,6 +63,8 @@ exec(OnigEncoding enc, OnigOptionType options,
   UChar* pattern_end = (UChar* )apattern_end;
 
   onig_initialize(&enc, 1);
+  onig_set_retry_limit_in_match(RETRY_LIMIT);
+  onig_set_parse_depth_limit(PARSE_DEPTH_LIMIT);
 
   r = onig_new(&reg, pattern, pattern_end,
                options, enc, ONIG_SYNTAX_DEFAULT, &einfo);
@@ -71,8 +76,7 @@ exec(OnigEncoding enc, OnigOptionType options,
     return -1;
   }
 
-  if (onigenc_is_valid_mbc_string(enc, str, (UChar* )str_null_end) != 0) {
-    end = str + onigenc_str_bytelen_null(enc, str);
+  if (onigenc_is_valid_mbc_string(enc, str, end) != 0) {
     r = search(reg, str, end);
   }
 
@@ -93,12 +97,33 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
 
   unsigned char *pattern_end;
   unsigned char *str_null_end;
-
-  size_t remaining_size = Size;
-  unsigned char *data = (unsigned char *)(Data);
+  size_t remaining_size;
+  unsigned char *data;
 
   // pull off one byte to switch off
-  unsigned char encoding_choice = data[0];
+#if !defined(UTF16_BE) && !defined(UTF16_LE)
+  OnigEncodingType *encodings[] = {
+	  ONIG_ENCODING_SJIS,
+	  ONIG_ENCODING_EUC_JP,
+	  ONIG_ENCODING_CP1251,
+	  ONIG_ENCODING_ISO_8859_1,
+	  ONIG_ENCODING_UTF8,
+    ONIG_ENCODING_KOI8_R,
+    ONIG_ENCODING_BIG5,
+    ONIG_ENCODING_GB18030,
+    ONIG_ENCODING_EUC_TW
+  };
+
+  unsigned char encoding_choice;
+#endif
+
+  remaining_size = Size;
+  data = (unsigned char* )(Data);
+
+#if !defined(UTF16_BE) && !defined(UTF16_LE)
+  encoding_choice = data[0];
+#endif
+
   data++;
   remaining_size--;
 
@@ -113,27 +138,44 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
   unsigned char *str = (unsigned char*)malloc(remaining_size+4);
   memset(str, 0, remaining_size+4);
   memcpy(str, data, remaining_size);
-  str_null_end = str + (remaining_size+4);
+  str_null_end = str + remaining_size;
 
   int r;
-  OnigEncodingType *encodings[] = {
-	  ONIG_ENCODING_SJIS,
-	  ONIG_ENCODING_EUC_JP,
-	  ONIG_ENCODING_CP1251,
-	  ONIG_ENCODING_ISO_8859_1,
-	  ONIG_ENCODING_UTF8,
-          ONIG_ENCODING_UTF16_BE,
-          ONIG_ENCODING_KOI8_R,
-          ONIG_ENCODING_BIG5
-  };
+  OnigEncodingType *enc;
+
+#ifdef UTF16_BE
+  enc = ONIG_ENCODING_UTF16_BE;
+#else
+#ifdef UTF16_LE
+  enc = ONIG_ENCODING_UTF16_LE;
+#else
   int num_encodings = sizeof(encodings)/sizeof(encodings[0]);
-  OnigEncodingType *enc = encodings[encoding_choice % num_encodings];
+  enc = encodings[encoding_choice % num_encodings];
+#endif
+#endif
 
   r = exec(enc, ONIG_OPTION_NONE, (char *)pattern, (char *)pattern_end,
-           (char *)str, (char *)str_null_end);
+           (char *)str, str_null_end);
 
   free(pattern);
   free(str);
 
   return r;
 }
+
+#ifdef WITH_READ_MAIN
+
+#include <unistd.h>
+
+extern int main(int argc, char* argv[])
+{
+  size_t n;
+  uint8_t Data[10000];
+
+  n = read(0, Data, sizeof(Data));
+  fprintf(stdout, "n: %ld\n", n);
+  LLVMFuzzerTestOneInput(Data, n);
+
+  return 0;
+}
+#endif /* WITH_READ_MAIN */
