@@ -39,9 +39,12 @@ pkgconfig_DATA = oniguruma.pc
 all-test:
 	cd test; make test
 
+archive:
+	git archive --format=tar --prefix=oniguruma/ HEAD | gzip > ../oniguruma-archive.tar.gz
+
 sanitize:
 	make clean
-	./configure CC=clang CFLAGS="-O -g -fsanitize=address"
+	./configure --enable-posix-api=no CC=clang CFLAGS="-O -g -fsanitize=address"
 	make
 	make all-test
 
