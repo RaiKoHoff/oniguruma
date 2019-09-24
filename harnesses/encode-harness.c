@@ -163,11 +163,11 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
   // pull off one byte to switch off
 #if !defined(UTF16_BE) && !defined(UTF16_LE)
   OnigEncodingType *encodings[] = {
-	  ONIG_ENCODING_SJIS,
-	  ONIG_ENCODING_EUC_JP,
-	  ONIG_ENCODING_CP1251,
-	  ONIG_ENCODING_ISO_8859_1,
-	  ONIG_ENCODING_UTF8,
+    ONIG_ENCODING_SJIS,
+    ONIG_ENCODING_EUC_JP,
+    ONIG_ENCODING_CP1251,
+    ONIG_ENCODING_ISO_8859_1,
+    ONIG_ENCODING_UTF8,
     ONIG_ENCODING_KOI8_R,
     ONIG_ENCODING_BIG5,
     ONIG_ENCODING_GB18030,
@@ -196,8 +196,7 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
 #endif
 
   // copy first PATTERN_SIZE bytes off to be the pattern
-  unsigned char *pattern = (unsigned char *)malloc(MAX_PATTERN_SIZE + 4);
-  memset(pattern, 0, pattern_size + 4);
+  unsigned char *pattern = (unsigned char *)malloc(pattern_size != 0 ? pattern_size : 1);
   memcpy(pattern, data, pattern_size);
   pattern_end = pattern + pattern_size;
   data += pattern_size;
@@ -207,8 +206,7 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
   if (remaining_size % 2 == 1) remaining_size--;
 #endif
 
-  unsigned char *str = (unsigned char*)malloc(MAX_DATA_SIZE + 4);
-  memset(str, 0, remaining_size + 4);
+  unsigned char *str = (unsigned char*)malloc(remaining_size != 0 ? remaining_size : 1);
   memcpy(str, data, remaining_size);
   str_null_end = str + remaining_size;
 
