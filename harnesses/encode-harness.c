@@ -57,6 +57,12 @@ search(regex_t* reg, unsigned char* str, unsigned char* end)
     fprintf(stdout, "  (%s)\n", ONIGENC_NAME(onig_get_encoding(reg)));
 #endif
     onig_region_free(region, 1 /* 1:free self, 0:free contents only */);
+
+    if (r == ONIGERR_STACK_BUG ||
+        r == ONIGERR_UNDEFINED_BYTECODE ||
+        r == ONIGERR_UNEXPECTED_BYTECODE)
+      return -2;
+
     return -1;
   }
 
@@ -71,7 +77,7 @@ static long REGEX_SUCCESS_COUNT;
 static long VALID_STRING_COUNT;
 
 static int
-exec(OnigEncoding enc, OnigOptionType options,
+exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
      char* apattern, char* apattern_end, char* astr, UChar* end)
 {
   int r;
@@ -89,7 +95,7 @@ exec(OnigEncoding enc, OnigOptionType options,
   //onig_set_parse_depth_limit(PARSE_DEPTH_LIMIT);
 
   r = onig_new(&reg, pattern, pattern_end,
-               options, enc, ONIG_SYNTAX_DEFAULT, &einfo);
+               options, enc, syntax, &einfo);
   if (r != ONIG_NORMAL) {
     char s[ONIG_MAX_ERROR_MESSAGE_LEN];
     onig_error_code_to_str((UChar* )s, r, &einfo);
@@ -109,9 +115,13 @@ exec(OnigEncoding enc, OnigOptionType options,
   }
   REGEX_SUCCESS_COUNT++;
 
+  r = search(reg, pattern, pattern_end);
+  if (r == -2) return -2;
+
   if (onigenc_is_valid_mbc_string(enc, str, end) != 0) {
     VALID_STRING_COUNT++;
     r = search(reg, str, end);
+    if (r == -2) return -2;
   }
 
   onig_free(reg);
@@ -141,60 +151,101 @@ output_data(char* path, const uint8_t * data, size_t size)
 #endif
 
 
-#define MAX_PATTERN_SIZE     100
-#define NUM_CONTROL_BYTES      2
+#define EXEC_PRINT_INTERVAL  10000000
+#define MAX_PATTERN_SIZE     150
 
-#define EXEC_PRINT_INTERVAL  20000000
+#ifdef SYNTAX_TEST
+#define NUM_CONTROL_BYTES      3
+#else
+#define NUM_CONTROL_BYTES      2
+#endif
 
 int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
 {
-  INPUT_COUNT++;
+#if !defined(UTF16_BE) && !defined(UTF16_LE)
+  static OnigEncoding encodings[] = {
+    ONIG_ENCODING_SJIS,
+    ONIG_ENCODING_EUC_JP,
+    //ONIG_ENCODING_CP1251,
+    ONIG_ENCODING_ISO_8859_1,
+    ONIG_ENCODING_UTF8,
+    //ONIG_ENCODING_KOI8_R,
+    ONIG_ENCODING_BIG5,
+    ONIG_ENCODING_GB18030,
+    ONIG_ENCODING_EUC_TW
+  };
+  unsigned char encoding_choice;
+#endif
 
-  if (Size < NUM_CONTROL_BYTES) return 0;
+#ifdef SYNTAX_TEST
+  static OnigSyntaxType* syntaxes[] = {
+    ONIG_SYNTAX_POSIX_EXTENDED,
+    ONIG_SYNTAX_EMACS,
+    ONIG_SYNTAX_GREP,
+    ONIG_SYNTAX_GNU_REGEX,
+    ONIG_SYNTAX_JAVA,
+    ONIG_SYNTAX_PERL_NG,
+    ONIG_SYNTAX_ONIGURUMA
+  };
+  unsigned char syntax_choice;
+#endif
 
+  int r;
   int pattern_size;
   unsigned char *pattern_end;
   unsigned char *str_null_end;
   size_t remaining_size;
   unsigned char *data;
   unsigned char options_choice;
-  OnigOptionType options;
+  OnigOptionType  options;
+  OnigEncoding    enc;
+  OnigSyntaxType* syntax;
 
-  // pull off one byte to switch off
-#if !defined(UTF16_BE) && !defined(UTF16_LE)
-  OnigEncodingType *encodings[] = {
-    ONIG_ENCODING_SJIS,
-    ONIG_ENCODING_EUC_JP,
-    ONIG_ENCODING_CP1251,
-    ONIG_ENCODING_ISO_8859_1,
-    ONIG_ENCODING_UTF8,
-    ONIG_ENCODING_KOI8_R,
-    ONIG_ENCODING_BIG5,
-    ONIG_ENCODING_GB18030,
-    ONIG_ENCODING_EUC_TW
-  };
-
-  unsigned char encoding_choice;
-#endif
+  INPUT_COUNT++;
+  if (Size < NUM_CONTROL_BYTES) return 0;
 
   remaining_size = Size;
   data = (unsigned char* )(Data);
 
-#if !defined(UTF16_BE) && !defined(UTF16_LE)
+#ifdef UTF16_BE
+  enc = ONIG_ENCODING_UTF16_BE;
+#else
+#ifdef UTF16_LE
+  enc = ONIG_ENCODING_UTF16_LE;
+#else
   encoding_choice = data[0];
-#endif
-
   data++;
   remaining_size--;
+
+  int num_encodings = sizeof(encodings)/sizeof(encodings[0]);
+  enc = encodings[encoding_choice % num_encodings];
+#endif
+#endif
+
+#ifdef SYNTAX_TEST
+  syntax_choice = data[0];
+  data++;
+  remaining_size--;
+
+  int num_syntaxes = sizeof(syntaxes)/sizeof(syntaxes[0]);
+  syntax = syntaxes[syntax_choice % num_syntaxes];
+#else
+  syntax = ONIG_SYNTAX_DEFAULT;
+#endif
 
   options_choice = data[0];
   options = (options_choice % 2 == 0) ? ONIG_OPTION_NONE : ONIG_OPTION_IGNORECASE;
   data++;
   remaining_size--;
 
-  pattern_size = remaining_size / 2;
-  if (pattern_size > MAX_PATTERN_SIZE)
-    pattern_size = MAX_PATTERN_SIZE;
+  //pattern_size = remaining_size / 2;
+  if (remaining_size == 0)
+    pattern_size = 0;
+  else {
+    pattern_size = INPUT_COUNT % remaining_size;
+    if (pattern_size > MAX_PATTERN_SIZE)
+      pattern_size = MAX_PATTERN_SIZE;
+  }
 
 #if defined(UTF16_BE) || defined(UTF16_LE)
   if (pattern_size % 2 == 1) pattern_size--;
@@ -215,25 +266,17 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
   memcpy(str, data, remaining_size);
   str_null_end = str + remaining_size;
 
-  int r;
-  OnigEncodingType *enc;
-
-#ifdef UTF16_BE
-  enc = ONIG_ENCODING_UTF16_BE;
-#else
-#ifdef UTF16_LE
-  enc = ONIG_ENCODING_UTF16_LE;
-#else
-  int num_encodings = sizeof(encodings)/sizeof(encodings[0]);
-  enc = encodings[encoding_choice % num_encodings];
-#endif
-#endif
-
 #ifdef WITH_READ_MAIN
+#ifdef SYNTAX_TEST
+  fprintf(stdout, "enc: %s, syntax: %d, options: %u\n",
+          ONIGENC_NAME(enc), (int )(syntax_choice % num_syntaxes), options);
+#else
   fprintf(stdout, "enc: %s, options: %u\n", ONIGENC_NAME(enc), options);
 #endif
+#endif
 
-  r = exec(enc, options, (char *)pattern, (char *)pattern_end,
+  r = exec(enc, options, syntax,
+           (char *)pattern, (char *)pattern_end,
            (char *)str, str_null_end);
 
   free(pattern);

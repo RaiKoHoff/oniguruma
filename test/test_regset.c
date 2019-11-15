@@ -14,16 +14,6 @@ static int nfail  = 0;
 static int nerror = 0;
 
 
-static double
-get_sec(struct timespec* ts, struct timespec* te)
-{
-  double t;
-
-  t = (te->tv_sec - ts->tv_sec) +
-      (double )(te->tv_nsec - ts->tv_nsec) / 1000000000.0;
-  return t;
-}
-
 static int
 make_regset(int line_no, int n, char* pat[], OnigRegSet** rset, int error_no)
 {
@@ -76,6 +66,20 @@ make_regset(int line_no, int n, char* pat[], OnigRegSet** rset, int error_no)
   return 0;
 }
 
+#ifndef _WIN32
+
+static double
+get_sec(struct timespec* ts, struct timespec* te)
+{
+  double t;
+
+  t = (te->tv_sec - ts->tv_sec) +
+      (double )(te->tv_nsec - ts->tv_nsec) / 1000000000.0;
+  return t;
+}
+
+/* clock_gettime() doesn't exist in Windows */
+
 static int
 time_test(int repeat, int n, char* ps[], char* s, char* end, double* rt_set, double* rt_reg)
 {
@@ -83,8 +87,6 @@ time_test(int repeat, int n, char* ps[], char* s, char* end, double* rt_set, dou
   int i;
   int match_pos;
   OnigRegSet* set;
-  regex_t* regs[20];
-  OnigErrorInfo einfo;
   struct timespec ts1, ts2;
   double t_set, t_reg;
 
@@ -105,12 +107,6 @@ time_test(int repeat, int n, char* ps[], char* s, char* end, double* rt_set, dou
   clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts2);
   t_set = get_sec(&ts1, &ts2);
 
-  for (i = 0; i < n; i++) {
-    r = onig_new(&regs[i], (UChar* )ps[i], (UChar* )(ps[i] + strlen(ps[i])),
-                 ONIG_OPTION_DEFAULT, ONIG_ENCODING_UTF8, ONIG_SYNTAX_DEFAULT, &einfo);
-    if (r != 0) return r;
-  }
-
 
   clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts1);
 
@@ -124,12 +120,15 @@ time_test(int repeat, int n, char* ps[], char* s, char* end, double* rt_set, dou
   }
 
   clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts2);
+  onig_regset_free(set);
+
   t_reg = get_sec(&ts1, &ts2);
 
   *rt_set = t_set;
   *rt_reg = t_reg;
   return 0;
 }
+#endif
 
 static void
 fisher_yates_shuffle(int n, char* ps[], char* cps[])
@@ -148,6 +147,7 @@ fisher_yates_shuffle(int n, char* ps[], char* cps[])
   }
 }
 
+#ifndef _WIN32
 static void
 time_compare(int n, char* ps[], char* s, char* end)
 {
@@ -176,6 +176,7 @@ time_compare(int n, char* ps[], char* s, char* end)
   fprintf(stdout, "POS lead: %6.2lfmsec.  REG lead: %6.2lfmsec.\n",
           total_set * 1000.0, total_reg * 1000.0);
 }
+#endif
 
 
 static OnigRegSetLead XX_LEAD = ONIG_REGSET_POSITION_LEAD;
@@ -284,7 +285,11 @@ n(int line_no, int n, char* ps[], char* s)
 #define X2(ps,s,from,to)      x2(__LINE__,ASIZE(ps),ps,s,from,to)
 #define X3(ps,s,from,to,mem)  x3(__LINE__,ASIZE(ps),ps,s,from,to,mem)
 #define N(ps,s)                n(__LINE__,ASIZE(ps),ps,s)
+#define NZERO(s)               n(__LINE__,0,(char** )0,s)
 
+#ifndef _WIN32
+
+/* getdelim() doesn't exist in Windows */
 
 static int
 get_all_content_of_file(char* path, char** rs, char** rend)
@@ -307,6 +312,7 @@ get_all_content_of_file(char* path, char** rs, char** rend)
   *rend = line + len;
   return 0;
 }
+#endif
 
 
 #define TEXT_PATH    "kofu-utf8.txt"
@@ -317,9 +323,6 @@ get_all_content_of_file(char* path, char** rs, char** rend)
    $ nkf -Lu -w8 kofu.txt > kofu-utf8.txt
      (convert encoding to utf-8 with BOM and line terminator to be Unix-form)
 */
-
-static char* p0[] = {
-};
 
 static char* p1[] = {
   "abc",
@@ -394,15 +397,16 @@ main(int argc, char* argv[])
   int r;
   int file_exist;
   char *s, *end;
+  OnigEncoding use_encs[1];
 
-  static OnigEncoding use_encs[] = { ONIG_ENCODING_UTF8 };
+  use_encs[0] = ONIG_ENCODING_UTF8;
+  onig_initialize(use_encs, sizeof(use_encs)/sizeof(use_encs[0]));
 
   srand(12345);
-  onig_initialize(use_encs, sizeof(use_encs)/sizeof(use_encs[0]));
 
   XX_LEAD = ONIG_REGSET_POSITION_LEAD;
 
-  N(p0, " abab bccab ca");
+  NZERO(" abab bccab ca");
   X2(p1, " abab bccab ca", 8, 11);
   X3(p1, " abab bccab ca", 8, 11, 1);
   N(p2, " XXXX AAA 1223 012345678bbb");
@@ -411,13 +415,14 @@ main(int argc, char* argv[])
 
   XX_LEAD = ONIG_REGSET_REGEX_LEAD;
 
-  N(p0, " abab bccab ca");
+  NZERO(" abab bccab ca");
   X2(p1, " abab bccab ca", 8, 11);
   X3(p1, " abab bccab ca", 8, 11, 1);
   N(p2, " XXXX AAA 1223 012345678bbb");
   X2(p2, "0123456789", 9, 10);
   X2(p7, "abcde 555 qwert", 6, 9);
 
+#ifndef _WIN32
   r = get_all_content_of_file(TEXT_PATH, &s, &end);
   if (r == 0) {
     fprintf(stdout, "FILE: %s, size: %d\n", TEXT_PATH, (int )(end - s));
@@ -427,6 +432,9 @@ main(int argc, char* argv[])
     fprintf(stdout, "Ignore %s\n", TEXT_PATH);
     file_exist = 0;
   }
+#else
+    file_exist = 0;
+#endif
 
   if (file_exist != 0) {
     X2(p2, s, 10, 22);
@@ -439,6 +447,7 @@ main(int argc, char* argv[])
           nsucc, nfail, nerror, onig_version());
 
   if (file_exist != 0) {
+#ifndef _WIN32
     fprintf(stdout, "\n");
     time_compare(ASIZE(p2), p2, s, end);
     time_compare(ASIZE(p3), p3, s, end);
@@ -446,8 +455,11 @@ main(int argc, char* argv[])
     time_compare(ASIZE(p5), p5, s, end);
     time_compare(ASIZE(p6), p6, s, end);
     fprintf(stdout, "\n");
+#endif
+    free(s);
   }
 
   onig_end();
+
   return ((nfail == 0 && nerror == 0) ? 0 : -1);
 }

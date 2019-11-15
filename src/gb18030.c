@@ -33,6 +33,7 @@
 #if 1
 #define DEBUG_GB18030(arg)
 #else
+#include <stdio.h>
 #define DEBUG_GB18030(arg) printf arg
 #endif
 
@@ -73,6 +74,20 @@ gb18030_mbc_enc_len(const UChar* p)
     return 4;
 
   return 2;
+}
+
+static int
+gb18030_code_to_mbclen(OnigCodePoint code)
+{
+       if ((code & 0xff000000) != 0) return 4;
+  else if ((code &   0xff0000) != 0) return ONIGERR_INVALID_CODE_POINT_VALUE;
+  else if ((code &     0xff00) != 0) return 2;
+  else {
+    if (GB18030_MAP[(int )(code & 0xff)] == CM)
+      return ONIGERR_INVALID_CODE_POINT_VALUE;
+
+    return 1;
+  }
 }
 
 static int
@@ -513,7 +528,7 @@ OnigEncodingType OnigEncodingGB18030 = {
   1,          /* min enc length */
   onigenc_is_mbc_newline_0x0a,
   gb18030_mbc_to_code,
-  onigenc_mb4_code_to_mbclen,
+  gb18030_code_to_mbclen,
   gb18030_code_to_mbc,
   gb18030_mbc_case_fold,
   onigenc_ascii_apply_all_case_fold,
