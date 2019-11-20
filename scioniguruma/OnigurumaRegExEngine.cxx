@@ -1,4 +1,5 @@
-﻿/**
+// encoding: UTF-8
+/**
  * @file  OnigurumaRegExEngine.cxx
  * @brief integrate Oniguruma regex engine for Scintilla library
  *        (Scintilla Lib is copyright 1998-2017 by Neil Hodgson <neilh@scintilla.org>)
@@ -56,8 +57,9 @@ using namespace Scintilla;
 // ***   Oningmo configuration   ***
 // ============================================================================
 
-constexpr OnigEncoding g_pOnigEncodingType = ONIG_ENCODING_UTF8;  // ONIG_ENCODING_ASCII;
-static OnigEncoding g_UsedEncodingsTypes[] = { g_pOnigEncodingType };
+enum class EOLmode : int { CRLF = SC_EOL_CRLF, CR = SC_EOL_CR, LF = SC_EOL_LF };
+
+static OnigEncoding s_UsedEncodingsTypes[] = { ONIG_ENCODING_UTF8, ONIG_ENCODING_UTF8_CR, ONIG_ENCODING_UTF8_CRLF };
 
 // ============================================================================
 // ============================================================================
@@ -65,8 +67,8 @@ static OnigEncoding g_UsedEncodingsTypes[] = { g_pOnigEncodingType };
 // ------------------------------------
 // --- Onigmo Engine Simple Options ---
 // ------------------------------------
-static void SetSimpleOptions(OnigOptionType& onigOptions, 
-  const bool caseSensitive, const int searchFlags = 0)
+static void SetSimpleOptions(OnigOptionType& onigOptions, EOLmode eolMode,
+  const bool caseSensitive, const bool forwardSearch, const int searchFlags = 0)
 {
   // fixed options
   onigOptions = ONIG_OPTION_DEFAULT;
@@ -75,10 +77,21 @@ static void SetSimpleOptions(OnigOptionType& onigOptions,
   ONIG_OPTION_OFF(onigOptions, ONIG_OPTION_EXTEND);
   ONIG_OPTION_OFF(onigOptions, ONIG_OPTION_SINGLELINE);
   ONIG_OPTION_ON(onigOptions, ONIG_OPTION_NEGATE_SINGLELINE);
+  ONIG_OPTION_OFF(onigOptions, ONIG_OPTION_FIND_LONGEST);
+
   //ONIG_OPTION_OFF(onigOptions, ONIG_OPTION_ASCII_RANGE);
   //ONIG_OPTION_OFF(onigOptions, ONIG_OPTION_CAPTURE_GROUP);
 
   // dynamic options
+
+  switch (eolMode) {
+    case EOLmode::CR:
+    case EOLmode::LF:
+    case EOLmode::CRLF:
+    default:
+      break;
+  }
+
   if (searchFlags & SCFIND_DOT_MATCH_ALL) {
     ONIG_OPTION_ON(onigOptions, ONIG_SYN_OP_DOT_ANYCHAR);
     ONIG_OPTION_ON(onigOptions, ONIG_OPTION_MULTILINE);
@@ -88,11 +101,16 @@ static void SetSimpleOptions(OnigOptionType& onigOptions,
     ONIG_OPTION_OFF(onigOptions, ONIG_OPTION_MULTILINE);
   }
 
-  if (!caseSensitive) {
-    ONIG_OPTION_ON(onigOptions, ONIG_OPTION_IGNORECASE);
+  if (caseSensitive) {
+    ONIG_OPTION_OFF(onigOptions, ONIG_OPTION_IGNORECASE);
   }
   else {
-    ONIG_OPTION_OFF(onigOptions, ONIG_OPTION_IGNORECASE);
+    ONIG_OPTION_ON(onigOptions, ONIG_OPTION_IGNORECASE);
+  }
+
+  if (forwardSearch) {
+  }
+  else {
   }
 }
 // ============================================================================
@@ -115,7 +133,7 @@ public:
     , m_MatchLen(0)
   {
     m_OnigSyntax.op |= ONIG_SYN_OP_ESC_LTGT_WORD_BEGIN_END; // xcluded from ONIG_SYNTAX_DEFAULT ?
-    onig_initialize(g_UsedEncodingsTypes, _ARRAYSIZE(g_UsedEncodingsTypes));
+    onig_initialize(s_UsedEncodingsTypes, _ARRAYSIZE(s_UsedEncodingsTypes));
     onig_region_init(&m_Region);
   }
 
@@ -243,6 +261,7 @@ Sci::Position OnigurumaRegExEngine::FindText(Document* doc, Sci::Position minPos
   }
 
   auto const docLen = SciPos(doc->Length());
+  EOLmode const eolMode = static_cast<EOLmode>(doc->eolMode);
 
   bool const findForward = (minPos <= maxPos);
   int const increment = findForward ? 1 : -1;
@@ -250,13 +269,18 @@ Sci::Position OnigurumaRegExEngine::FindText(Document* doc, Sci::Position minPos
   // Range endpoints should not be inside DBCS characters, but just in case, move them.
   minPos = doc->MovePositionOutsideChar(minPos, increment, false);
   maxPos = doc->MovePositionOutsideChar(maxPos, increment, false);
+  
+  if (!findForward) {
+    minPos = doc->MovePositionOutsideChar(minPos - 1, increment, false);
+  }
+
 
   Sci::Position const rangeBeg = (findForward) ? minPos : maxPos;
   Sci::Position const rangeEnd = (findForward) ? maxPos : minPos;
   Sci::Position const rangeLen = (rangeEnd - rangeBeg);
 
   OnigOptionType onigOptions;
-  SetSimpleOptions(onigOptions, caseSensitive, searchFlags);
+  SetSimpleOptions(onigOptions, eolMode, caseSensitive, findForward, searchFlags);
   ONIG_OPTION_ON(onigOptions, (rangeBeg != 0) ? ONIG_OPTION_NOTBOL : ONIG_OPTION_NONE);
   ONIG_OPTION_ON(onigOptions, (rangeEnd != docLen) ? ONIG_OPTION_NOTEOL : ONIG_OPTION_NONE);
   
@@ -273,8 +297,11 @@ Sci::Position OnigurumaRegExEngine::FindText(Document* doc, Sci::Position minPos
     try {
       OnigErrorInfo einfo;
       onig_free(m_RegExpr);
+
+      OnigEncoding const onigEncType = (eolMode == EOLmode::LF) ? ONIG_ENCODING_UTF8 : 
+                                      ((eolMode == EOLmode::CR) ? ONIG_ENCODING_UTF8_CR : ONIG_ENCODING_UTF8_CRLF);
       int res = onig_new(&m_RegExpr, UCharCPtr(m_RegExprStrg.c_str()), UCharCPtr(m_RegExprStrg.c_str() + m_RegExprStrg.length()),
-                         m_CmplOptions, g_pOnigEncodingType, &m_OnigSyntax, &einfo);
+                         m_CmplOptions, onigEncType, &m_OnigSyntax, &einfo);
       if (res != ONIG_NORMAL) {
         onig_error_code_to_str(UCharPtr(m_ErrorInfo), res, &einfo);
         return SciPos(-2);   // -1 is normally used for not found, -2 is used here for invalid regex
@@ -645,8 +672,9 @@ class SimpleRegExEngine
 {
 public:
 
-  SimpleRegExEngine()
-    : m_OnigSyntax(*ONIG_SYNTAX_DEFAULT)
+  explicit SimpleRegExEngine(const EOLmode eolMode)
+    : m_EOLmode(eolMode)
+    , m_OnigSyntax(*ONIG_SYNTAX_DEFAULT)
     , m_Options(ONIG_OPTION_DEFAULT)
     , m_RegExpr(nullptr)
     , m_Region({ 0,0,nullptr,nullptr,nullptr })
@@ -655,7 +683,7 @@ public:
     , m_MatchLen(0)
   {
     m_OnigSyntax.op |= ONIG_SYN_OP_ESC_LTGT_WORD_BEGIN_END; // xcluded from ONIG_SYNTAX_DEFAULT ?
-    onig_initialize(g_UsedEncodingsTypes, _ARRAYSIZE(g_UsedEncodingsTypes));
+    onig_initialize(s_UsedEncodingsTypes, _ARRAYSIZE(s_UsedEncodingsTypes));
     onig_region_init(&m_Region);
   }
 
@@ -678,6 +706,7 @@ private:
 
 private:
 
+  EOLmode         m_EOLmode;
   OnigSyntaxType  m_OnigSyntax;
   OnigOptionType  m_Options;
   OnigRegex       m_RegExpr;
@@ -690,7 +719,6 @@ private:
 
 };
 // ============================================================================
-
 
 
 OnigPosition SimpleRegExEngine::Find(const OnigUChar* pattern, const OnigUChar* document, const bool caseSensitive)
@@ -706,15 +734,17 @@ OnigPosition SimpleRegExEngine::Find(const OnigUChar* pattern, const OnigUChar* 
   }
 
   // init search options
-  SetSimpleOptions(m_Options, caseSensitive);
+  SetSimpleOptions(m_Options, m_EOLmode, caseSensitive, true);
   m_ErrorInfo[0] = '\0';
 
   try {
     onig_free(m_RegExpr);
 
+    OnigEncoding const onigEncType = (m_EOLmode == EOLmode::LF) ? ONIG_ENCODING_UTF8 :
+      ((m_EOLmode == EOLmode::CR) ? ONIG_ENCODING_UTF8_CR : ONIG_ENCODING_UTF8_CRLF);
+
     OnigErrorInfo einfo;
-    int res = onig_new(&m_RegExpr, pattern, (pattern + patternLen),
-      m_Options, g_pOnigEncodingType, &m_OnigSyntax, &einfo);
+    int res = onig_new(&m_RegExpr, pattern, (pattern + patternLen), m_Options, onigEncType, &m_OnigSyntax, &einfo);
 
     if (res != ONIG_NORMAL) {
       //onig_error_code_to_str(m_ErrorInfo, res, &einfo);
@@ -769,18 +799,16 @@ OnigPosition SimpleRegExEngine::Find(const OnigUChar* pattern, const OnigUChar* 
 }
 // ============================================================================
 
-static SimpleRegExEngine ModuleRegExEngine;
-
-// ============================================================================
-
 extern "C"
 #ifdef SCINTILLA_DLL
 __declspec(dllexport)
 #endif
-ptrdiff_t WINAPI OnigRegExFind(const char* pchPattern, const char* pchText, const bool caseSensitive)
+ptrdiff_t WINAPI OnigRegExFind(const char* pchPattern, const char* pchText, const bool caseSensitive, const int eolMode)
 {
   const UChar* pattern = reinterpret_cast<const UChar*>(pchPattern);
   const UChar* string = reinterpret_cast<const UChar*>(pchText);
+
+  SimpleRegExEngine ModuleRegExEngine(static_cast<EOLmode>(eolMode));
 
   return static_cast<ptrdiff_t>(ModuleRegExEngine.Find(pattern, string, caseSensitive));
 }
