@@ -151,6 +151,39 @@ output_data(char* path, const uint8_t * data, size_t size)
 #endif
 
 
+static int
+alloc_exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
+           int pattern_size, size_t remaining_size, unsigned char *data)
+{
+  int r;
+  unsigned char *pattern_end;
+  unsigned char *str_null_end;
+
+  // copy first PATTERN_SIZE bytes off to be the pattern
+  unsigned char *pattern = (unsigned char *)malloc(pattern_size != 0 ? pattern_size : 1);
+  memcpy(pattern, data, pattern_size);
+  pattern_end = pattern + pattern_size;
+  data += pattern_size;
+  remaining_size -= pattern_size;
+
+#if defined(UTF16_BE) || defined(UTF16_LE)
+  if (remaining_size % 2 == 1) remaining_size--;
+#endif
+
+  unsigned char *str = (unsigned char*)malloc(remaining_size != 0 ? remaining_size : 1);
+  memcpy(str, data, remaining_size);
+  str_null_end = str + remaining_size;
+
+  r = exec(enc, options, syntax,
+           (char *)pattern, (char *)pattern_end,
+           (char *)str, str_null_end);
+
+  free(pattern);
+  free(str);
+  return r;
+}
+
+
 #define EXEC_PRINT_INTERVAL  10000000
 #define MAX_PATTERN_SIZE     150
 
@@ -164,12 +197,11 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
 {
 #if !defined(UTF16_BE) && !defined(UTF16_LE)
   static OnigEncoding encodings[] = {
-    ONIG_ENCODING_SJIS,
-    ONIG_ENCODING_EUC_JP,
-    //ONIG_ENCODING_CP1251,
-    ONIG_ENCODING_ISO_8859_1,
     ONIG_ENCODING_UTF8,
-    //ONIG_ENCODING_KOI8_R,
+    ONIG_ENCODING_UTF8,
+    ONIG_ENCODING_SJIS,
+    //ONIG_ENCODING_EUC_JP,
+    ONIG_ENCODING_ISO_8859_1,
     ONIG_ENCODING_BIG5,
     ONIG_ENCODING_GB18030,
     ONIG_ENCODING_EUC_TW
@@ -192,8 +224,6 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
 
   int r;
   int pattern_size;
-  unsigned char *pattern_end;
-  unsigned char *str_null_end;
   size_t remaining_size;
   unsigned char *data;
   unsigned char options_choice;
@@ -238,34 +268,6 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
   data++;
   remaining_size--;
 
-  //pattern_size = remaining_size / 2;
-  if (remaining_size == 0)
-    pattern_size = 0;
-  else {
-    pattern_size = INPUT_COUNT % remaining_size;
-    if (pattern_size > MAX_PATTERN_SIZE)
-      pattern_size = MAX_PATTERN_SIZE;
-  }
-
-#if defined(UTF16_BE) || defined(UTF16_LE)
-  if (pattern_size % 2 == 1) pattern_size--;
-#endif
-
-  // copy first PATTERN_SIZE bytes off to be the pattern
-  unsigned char *pattern = (unsigned char *)malloc(pattern_size != 0 ? pattern_size : 1);
-  memcpy(pattern, data, pattern_size);
-  pattern_end = pattern + pattern_size;
-  data += pattern_size;
-  remaining_size -= pattern_size;
-
-#if defined(UTF16_BE) || defined(UTF16_LE)
-  if (remaining_size % 2 == 1) remaining_size--;
-#endif
-
-  unsigned char *str = (unsigned char*)malloc(remaining_size != 0 ? remaining_size : 1);
-  memcpy(str, data, remaining_size);
-  str_null_end = str + remaining_size;
-
 #ifdef WITH_READ_MAIN
 #ifdef SYNTAX_TEST
   fprintf(stdout, "enc: %s, syntax: %d, options: %u\n",
@@ -275,17 +277,56 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
 #endif
 #endif
 
-  r = exec(enc, options, syntax,
-           (char *)pattern, (char *)pattern_end,
-           (char *)str, str_null_end);
+#ifdef WITH_READ_MAIN
+  int max_pattern_size;
 
-  free(pattern);
-  free(str);
+  if (remaining_size == 0)
+    max_pattern_size = 0;
+  else {
+    max_pattern_size = remaining_size - 1;
+    if (max_pattern_size > MAX_PATTERN_SIZE)
+      max_pattern_size = MAX_PATTERN_SIZE;
 
+#if defined(UTF16_BE) || defined(UTF16_LE)
+    if (max_pattern_size % 2 == 1) max_pattern_size--;
+#endif
+  }
+
+  for (pattern_size = 0; pattern_size <= max_pattern_size; ) {
+    fprintf(stdout, "pattern_size: %d\n", pattern_size);
+    r = alloc_exec(enc, options, syntax, pattern_size, remaining_size, data);
+    if (r == -2) {
+      //output_data("parser-bug", Data, Size);
+      exit(-2);
+    }
+
+#if defined(UTF16_BE) || defined(UTF16_LE)
+    pattern_size += 2;
+#else
+    pattern_size++;
+#endif
+  }
+
+#else /* WITH_READ_MAIN */
+
+  if (remaining_size == 0)
+    pattern_size = 0;
+  else {
+    pattern_size = INPUT_COUNT % remaining_size;
+    if (pattern_size > MAX_PATTERN_SIZE)
+      pattern_size = MAX_PATTERN_SIZE;
+
+#if defined(UTF16_BE) || defined(UTF16_LE)
+    if (pattern_size % 2 == 1) pattern_size--;
+#endif
+  }
+
+  r = alloc_exec(enc, options, syntax, pattern_size, remaining_size, data);
   if (r == -2) {
     //output_data("parser-bug", Data, Size);
     exit(-2);
   }
+#endif /* else WITH_READ_MAIN */
 
   if (EXEC_COUNT_INTERVAL == EXEC_PRINT_INTERVAL) {
     char d[64];
