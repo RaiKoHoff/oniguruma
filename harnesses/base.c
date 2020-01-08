@@ -1,5 +1,5 @@
 /*
- * encode-harness.c
+ * base.c
  * contributed by Mark Griffin
  */
 #include <stdio.h>
@@ -197,6 +197,7 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
 {
 #if !defined(UTF16_BE) && !defined(UTF16_LE)
   static OnigEncoding encodings[] = {
+    ONIG_ENCODING_UTF8,
     ONIG_ENCODING_UTF8,
     ONIG_ENCODING_UTF8,
     ONIG_ENCODING_SJIS,

@@ -1212,11 +1212,26 @@ extern int main(int argc, char* argv[])
   x2("[a[xyz]-c]", "a", 0, 1);
   x2("[a[xyz]-c]", "-", 0, 1);
   x2("[a[xyz]-c]", "c", 0, 1);
+  x2("(a.c|def)(.{4})(?<=\\1)", "abcdabc", 0, 7);
+  x2("(a.c)(.{3,}?)(?<!\\1)", "abcabcd", 0, 7);
+  e("(a.c|de)(.{4})(?<=\\1)", "abcdabc", ONIGERR_INVALID_LOOK_BEHIND_PATTERN);
+  e("(a*)(.{3,}?)(?<!\\1)", "abcabcd", ONIGERR_INVALID_LOOK_BEHIND_PATTERN);
+  x2("(a.c|def)(.{5})(?<=d\\1e)", "abcdabce", 0, 8);
+  x2("(?:(a.*b)|c.*d)(?<!(?(1))azzzb)", "azzzzb", 0, 6);
+  n("(?:(a.*b)|c.*d)(?<!(?(1))azzzb)", "azzzb");
+  e("(a.c|d(?<=\\k<1-1>))", "abcdabc", ONIGERR_INVALID_LOOK_BEHIND_PATTERN);
 
   x2("((?(a)\\g<1>|b))", "aab", 0, 3);
   x2("((?(a)\\g<1>))", "aab", 0, 2);
   x2("(b(?(a)|\\g<1>))", "bba", 0, 3);
   e("(()(?(2)\\g<1>))", "", ONIGERR_NEVER_ENDING_RECURSION);
+  x2("(?(a)(?:b|c))", "ac", 0, 2);
+  n("^(?(a)b|c)", "ac");
+  x2("(?i)a|b", "B", 0, 1);
+  n("((?i)a|b.)|c", "C");
+  n("c(?i)a.|b.", "Caz");
+  x2("c(?i)a|b", "cB", 0, 2); /* == c(?i:a|b) */
+  x2("c(?i)a.|b.", "cBb", 0, 3);
 
   x2("(?i)st", "st", 0, 2);
   x2("(?i)st", "St", 0, 2);
@@ -1279,6 +1294,13 @@ extern int main(int argc, char* argv[])
   x2("(?i)[ǰ]", "ǰ", 0, 2);
   x2("(?i)[ǰ]", "j\xcc\x8c", 0, 3);
   //x2("(?i)[j]\xcc\x8c", "ǰ", 0, 2);
+  x2("(?i)\ufb00a", "ffa", 0, 3);
+  x2("(?i)ffz", "\xef\xac\x80z", 0, 4);
+  x2("(?i)\u2126", "\xcf\x89", 0, 2);
+  x2("a(?i)\u2126", "a\xcf\x89", 0, 3);
+  x2("(?i)A\u2126", "a\xcf\x89", 0, 3);
+  x2("(?i)A\u2126=", "a\xcf\x89=", 0, 4);
+  x2("(?i:ss)=1234567890", "\xc5\xbf\xc5\xbf=1234567890", 0, 15);
 
   n("   \xfd", ""); /* https://bugs.php.net/bug.php?id=77370 */
   /* can't use \xfc00.. because compiler error: hex escape sequence out of range */
@@ -1301,6 +1323,13 @@ extern int main(int argc, char* argv[])
   e("(?<abc>\\g<abc>)", "zzzz", ONIGERR_NEVER_ENDING_RECURSION);
   e("(?<=(?>abc))", "abc", ONIGERR_INVALID_LOOK_BEHIND_PATTERN);
   e("(*FOO)", "abcdefg", ONIGERR_UNDEFINED_CALLOUT_NAME);
+  e("*", "abc", ONIGERR_TARGET_OF_REPEAT_OPERATOR_NOT_SPECIFIED);
+  e("|*", "abc", ONIGERR_TARGET_OF_REPEAT_OPERATOR_NOT_SPECIFIED);
+  e("(?i)*", "abc", ONIGERR_TARGET_OF_REPEAT_OPERATOR_NOT_SPECIFIED);
+  e("(?:*)", "abc", ONIGERR_TARGET_OF_REPEAT_OPERATOR_NOT_SPECIFIED);
+  e("(?m:*)", "abc", ONIGERR_TARGET_OF_REPEAT_OPERATOR_NOT_SPECIFIED);
+  e("(?:)*", "abc", ONIGERR_TARGET_OF_REPEAT_OPERATOR_NOT_SPECIFIED);
+  e("^*", "abc", ONIGERR_TARGET_OF_REPEAT_OPERATOR_INVALID);
 
   fprintf(stdout,
        "\nRESULT   SUCC: %4d,  FAIL: %d,  ERROR: %d      (by Oniguruma %s)\n",
