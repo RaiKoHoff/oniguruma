@@ -1,6 +1,6 @@
 /*
  * test_syntax.c
- * Copyright (c) 2019  K.Kosako
+ * Copyright (c) 2019-2020  K.Kosako
  */
 #include "config.h"
 #ifdef ONIG_ESCAPE_UCHAR_COLLISION
@@ -162,6 +162,29 @@ static int test_isolated_option()
   return 0;
 }
 
+static int test_prec_read()
+{
+  x2("(?=a).b", "ab", 0, 2);
+  x2("(?=ab|(.))\\1", "ab", 1, 2); // doesn't backtrack if success once in prec-read
+  n("(?!(.)z)a\\1", "aa");  // ! Perl 5.26.1 match with "aa"
+
+  return 0;
+}
+
+static int test_look_behind()
+{
+  x2("(?<=a)b", "ab", 1, 2);
+  x2("(?<=a|b)c", "abc", 2, 3);
+  x2("(?<=a|(.))\\1", "abcc", 3, 4);
+
+  // following is not match in Perl and Java
+  //x2("(?<=a|(.))\\1", "aa", 1, 2);
+
+  n("(?<!c|c)a", "ca");
+
+  return 0;
+}
+
 extern int main(int argc, char* argv[])
 {
   OnigEncoding use_encs[1];
@@ -176,6 +199,9 @@ extern int main(int argc, char* argv[])
   Syntax = ONIG_SYNTAX_PERL;
 
   test_isolated_option();
+  test_prec_read();
+  test_look_behind();
+  e("(?<=ab|(.))\\1", "abb", ONIGERR_INVALID_LOOK_BEHIND_PATTERN); // Variable length lookbehind not implemented in Perl 5.26.1
 
   x3("()", "abc", 0, 0, 1);
   e("(", "", ONIGERR_END_PATTERN_WITH_UNMATCHED_PARENTHESIS);
@@ -185,7 +211,11 @@ extern int main(int argc, char* argv[])
   Syntax = ONIG_SYNTAX_JAVA;
 
   test_isolated_option();
-
+  test_prec_read();
+  test_look_behind();
+  x2("(?<=ab|(.))\\1", "abb", 2, 3);
+  n("(?<!ab|b)c", "bbc");
+  n("(?<!b|ab)c", "bbc");
 
   fprintf(stdout,
        "\nRESULT   SUCC: %4d,  FAIL: %d,  ERROR: %d      (by Oniguruma %s)\n",
