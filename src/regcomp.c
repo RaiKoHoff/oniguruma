@@ -2055,7 +2055,8 @@ compile_anchor_look_behind_node(AnchorNode* node, regex_t* reg, ScanEnv* env)
       if (r < 0) return r;
       r = add_op(reg, OP_MOVE);
       if (r != 0) return r;
-      COP(reg)->move.n = (RelPositionType )(-ci.min);
+      //ORIG: COP(reg)->move.n = (RelPositionType )(-ci.min);
+      COP(reg)->move.n = (RelPositionType )(0-ci.min);
       r = compile_tree(node->lead_node, reg, env);
       if (r != 0) return r;
     }
@@ -2202,7 +2203,8 @@ compile_anchor_look_behind_not_node(AnchorNode* node, regex_t* reg,
       if (r < 0) return r;
       r = add_op(reg, OP_MOVE);
       if (r != 0) return r;
-      COP(reg)->move.n = (RelPositionType )(-ci.min);
+      //ORIG: COP(reg)->move.n = (RelPositionType )(-ci.min);
+      COP(reg)->move.n = (RelPositionType )(0-ci.min);
 
       r = compile_tree(node->lead_node, reg, env);
       if (r != 0) return r;
