@@ -1198,6 +1198,15 @@ extern int main(int argc, char* argv[])
   x2("\\g'0'++{,0}?",  "abcdefgh", 0, 0);
   x2("\\g'0'++{,0}b",  "abcdefgh", 1, 2);
   x2("\\g'0'++{,0}?def", "abcdefgh", 3, 6);
+  x2("a{1,3}?", "aaa", 0, 1);
+  x2("a{3}", "aaa", 0, 3);
+  x2("a{3}?", "aaa", 0, 3);
+  x2("a{3}?", "aa", 0, 0);
+  x2("a{3,3}?", "aaa", 0, 3);
+  n("a{3,3}?", "aa");
+  x2("a{1,3}+", "aaaaaa", 0, 6);
+  x2("a{3}+", "aaaaaa", 0, 6);
+  x2("a{3,3}+", "aaaaaa", 0, 6);
   n("a{2,3}?",  "a");
   n("a{3,2}a", "aaa");
   x2("a{3,2}b", "aaab", 0, 4);
@@ -1256,6 +1265,13 @@ extern int main(int argc, char* argv[])
   e("(?<=(?~|zoo)a.*z)", "abcdefz", ONIGERR_INVALID_LOOK_BEHIND_PATTERN);
   e("(?<=(?~|)a.*z)", "abcdefz", ONIGERR_INVALID_LOOK_BEHIND_PATTERN);
   e("(a(?~|boo)z){0}(?<=\\g<1>)", "abcdefz", ONIGERR_INVALID_LOOK_BEHIND_PATTERN);
+  x2("(?<=(?<= )| )", "abcde fg", 6, 6); // #173
+  x2("(?<=D|)(?<=@!nnnnnnnnnIIIIn;{1}D?()|<x@x*xxxD|)(?<=@xxx|xxxxx\\g<1>;{1}x)", "(?<=D|)(?<=@!nnnnnnnnnIIIIn;{1}D?()|<x@x*xxxD|)(?<=@xxx|xxxxx\\g<1>;{1}x)", 55, 55); // #173
+  x2("(?<=;()|)\\g<1>", "", 0, 0); // reduced #173
+  x2("(?<=;()|)\\k<1>", ";", 1, 1);
+  x2("(())\\g<3>{0}(?<=|())", "abc", 0, 0); // #175
+  x2("(?<=()|)\\1{0}", "abc", 0, 0);
+  e("(?<!xxxxxxxxxxxxxxxxxxxxxxx{32774}{65521}xxxxxxxx{65521}xxxxxxxxxxxxxx{32774}xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx)", "", ONIGERR_INVALID_LOOK_BEHIND_PATTERN); // #177
   x2("(?<=(?<=abc))def", "abcdef", 3, 6);
   x2("(?<=ab(?<=.+b)c)def", "abcdef", 3, 6);
   n("(?<=ab(?<=a+)c)def", "abcdef");
@@ -1382,6 +1398,7 @@ extern int main(int argc, char* argv[])
   x2("(?i)A\u2126=", "a\xcf\x89=", 0, 4);
   x2("(?i:ss)=1234567890", "\xc5\xbf\xc5\xbf=1234567890", 0, 15);
 
+  n("a(b|)+d", "abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcd"); /* https://www.haijin-boys.com/discussions/5079 */
   n("   \xfd", ""); /* https://bugs.php.net/bug.php?id=77370 */
   /* can't use \xfc00.. because compiler error: hex escape sequence out of range */
   n("()0\\xfc00000\\xfc00000\\xfc00000\xfc", ""); /* https://bugs.php.net/bug.php?id=77371 */

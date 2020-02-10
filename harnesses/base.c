@@ -14,10 +14,50 @@
 #include "oniguruma.h"
 
 
-//#define PARSE_DEPTH_LIMIT   120
-#define RETRY_LIMIT        3500
+#define PARSE_DEPTH_LIMIT           8
+#define RETRY_LIMIT              1000
+#define EXEC_PRINT_INTERVAL   5000000
 
 typedef unsigned char uint8_t;
+
+
+#ifdef STANDALONE
+
+#include <ctype.h>
+
+static void
+dump_data(FILE* fp, unsigned char* data, int len)
+{
+  int i;
+
+  fprintf(fp, "{\n");
+  for (i = 0; i < len; i++) {
+    unsigned char c = data[i];
+
+    if (isprint((int )c)) {
+      if (c == '\\')
+        fprintf(fp, " '\\\\'");
+      else
+        fprintf(fp, " '%c'", c);
+    }
+    else {
+      fprintf(fp, "0x%02x", (int )c);
+    }
+
+    if (i == len - 1) {
+      fprintf(fp, "\n");
+    }
+    else {
+      if (i % 8 == 7)
+        fprintf(fp, ",\n");
+      else
+        fprintf(fp, ", ");
+    }
+  }
+  fprintf(fp, "};\n");
+}
+
+#else
 
 static void
 output_current_time(FILE* fp)
@@ -30,6 +70,8 @@ output_current_time(FILE* fp)
 
   fprintf(fp, "%s", d);
 }
+
+#endif
 
 static int
 search(regex_t* reg, unsigned char* str, unsigned char* end)
@@ -44,7 +86,7 @@ search(regex_t* reg, unsigned char* str, unsigned char* end)
   range = end;
   r = onig_search(reg, str, end, start, range, region, ONIG_OPTION_NONE);
   if (r >= 0) {
-#ifdef WITH_READ_MAIN
+#ifdef STANDALONE
     int i;
 
     fprintf(stdout, "match at %d  (%s)\n", r,
@@ -55,13 +97,13 @@ search(regex_t* reg, unsigned char* str, unsigned char* end)
 #endif
   }
   else if (r == ONIG_MISMATCH) {
-#ifdef WITH_READ_MAIN
+#ifdef STANDALONE
     fprintf(stdout, "search fail (%s)\n",
             ONIGENC_NAME(onig_get_encoding(reg)));
 #endif
   }
   else { /* error */
-#ifdef WITH_READ_MAIN
+#ifdef STANDALONE
     char s[ONIG_MAX_ERROR_MESSAGE_LEN];
 
     onig_error_code_to_str((UChar* )s, r);
@@ -104,14 +146,16 @@ exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
 
   onig_initialize(&enc, 1);
   onig_set_retry_limit_in_match(RETRY_LIMIT);
-  //onig_set_parse_depth_limit(PARSE_DEPTH_LIMIT);
+#ifdef PARSE_DEPTH_LIMIT
+  onig_set_parse_depth_limit(PARSE_DEPTH_LIMIT);
+#endif
 
   r = onig_new(&reg, pattern, pattern_end,
                options, enc, syntax, &einfo);
   if (r != ONIG_NORMAL) {
     char s[ONIG_MAX_ERROR_MESSAGE_LEN];
     onig_error_code_to_str((UChar* )s, r, &einfo);
-#ifdef WITH_READ_MAIN
+#ifdef STANDALONE
     fprintf(stdout, "ERROR: %s\n", s);
 #endif
     onig_end();
@@ -130,38 +174,18 @@ exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
   r = search(reg, pattern, pattern_end);
   if (r == -2) return -2;
 
-  if (onigenc_is_valid_mbc_string(enc, str, end) != 0) {
-    VALID_STRING_COUNT++;
-    r = search(reg, str, end);
-    if (r == -2) return -2;
+  if (r != ONIGERR_RETRY_LIMIT_IN_MATCH_OVER) {
+    if (onigenc_is_valid_mbc_string(enc, str, end) != 0) {
+      VALID_STRING_COUNT++;
+      r = search(reg, str, end);
+      if (r == -2) return -2;
+    }
   }
 
   onig_free(reg);
   onig_end();
   return 0;
 }
-
-#if 0
-static void
-output_data(char* path, const uint8_t * data, size_t size)
-{
-  int fd;
-  ssize_t n;
-
-  fd = open(path, O_CREAT|O_RDWR, S_IRUSR|S_IRGRP|S_IROTH);
-  if (fd == -1) {
-    fprintf(stderr, "ERROR: output_data(): can't open(%s)\n", path);
-    return ;
-  }
-
-  n = write(fd, (const void* )data, size);
-  if (n != size) {
-    fprintf(stderr, "ERROR: output_data(): n: %ld, size: %ld\n", n, size);
-  }
-  close(fd);
-}
-#endif
-
 
 static int
 alloc_exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
@@ -196,13 +220,10 @@ alloc_exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
 }
 
 
-#define EXEC_PRINT_INTERVAL  10000000
-#define MAX_PATTERN_SIZE     150
-
 #ifdef SYNTAX_TEST
-#define NUM_CONTROL_BYTES      3
+#define NUM_CONTROL_BYTES      4
 #else
-#define NUM_CONTROL_BYTES      2
+#define NUM_CONTROL_BYTES      3
 #endif
 
 int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
@@ -232,6 +253,19 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
     ONIG_SYNTAX_PERL_NG,
     ONIG_SYNTAX_ONIGURUMA
   };
+
+#ifdef STANDALONE
+  static char* syntax_names[] = {
+    "Posix Extended",
+    "Emacs",
+    "Grep",
+    "GNU Regex",
+    "Java",
+    "Perl+NG",
+    "Oniguruma"
+  };
+#endif
+
   unsigned char syntax_choice;
 #endif
 
@@ -240,6 +274,7 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
   size_t remaining_size;
   unsigned char *data;
   unsigned char options_choice;
+  unsigned char pattern_size_choice;
   OnigOptionType  options;
   OnigEncoding    enc;
   OnigSyntaxType* syntax;
@@ -281,76 +316,53 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
   data++;
   remaining_size--;
 
-#ifdef WITH_READ_MAIN
-#ifdef SYNTAX_TEST
-  fprintf(stdout, "enc: %s, syntax: %d, options: %u\n",
-          ONIGENC_NAME(enc), (int )(syntax_choice % num_syntaxes), options);
-#else
-  fprintf(stdout, "enc: %s, options: %u\n", ONIGENC_NAME(enc), options);
-#endif
-#endif
-
-#ifdef WITH_READ_MAIN
-  int max_pattern_size;
-
-  if (remaining_size == 0)
-    max_pattern_size = 0;
-  else {
-    max_pattern_size = remaining_size - 1;
-    if (max_pattern_size > MAX_PATTERN_SIZE)
-      max_pattern_size = MAX_PATTERN_SIZE;
-
-#if defined(UTF16_BE) || defined(UTF16_LE)
-    if (max_pattern_size % 2 == 1) max_pattern_size--;
-#endif
-  }
-
-  for (pattern_size = 0; pattern_size <= max_pattern_size; ) {
-    fprintf(stdout, "pattern_size: %d\n", pattern_size);
-    r = alloc_exec(enc, options, syntax, pattern_size, remaining_size, data);
-    if (r == -2) {
-      //output_data("parser-bug", Data, Size);
-      exit(-2);
-    }
-
-#if defined(UTF16_BE) || defined(UTF16_LE)
-    pattern_size += 2;
-#else
-    pattern_size++;
-#endif
-  }
-
-#else /* WITH_READ_MAIN */
+  pattern_size_choice = data[0];
+  data++;
+  remaining_size--;
 
   if (remaining_size == 0)
     pattern_size = 0;
   else {
-    pattern_size = INPUT_COUNT % remaining_size;
-    if (pattern_size > MAX_PATTERN_SIZE)
-      pattern_size = MAX_PATTERN_SIZE;
-
+    pattern_size = (int )pattern_size_choice % remaining_size;
 #if defined(UTF16_BE) || defined(UTF16_LE)
     if (pattern_size % 2 == 1) pattern_size--;
 #endif
   }
 
-  r = alloc_exec(enc, options, syntax, pattern_size, remaining_size, data);
-  if (r == -2) {
-    //output_data("parser-bug", Data, Size);
-    exit(-2);
-  }
-#endif /* else WITH_READ_MAIN */
+#ifdef STANDALONE
+  dump_data(stdout, data, pattern_size);
+#ifdef SYNTAX_TEST
+  fprintf(stdout, "enc: %s, syntax: %s, options: %u, pattern_size: %d\n",
+          ONIGENC_NAME(enc),
+          syntax_names[syntax_choice % num_syntaxes],
+          options,
+          pattern_size);
+#else
+  fprintf(stdout, "enc: %s, options: %u, pattern_size: %d\n",
+          ONIGENC_NAME(enc), options, pattern_size);
+#endif
+#endif
 
+  r = alloc_exec(enc, options, syntax, pattern_size, remaining_size, data);
+  if (r == -2) exit(-2);
+
+#ifndef STANDALONE
   if (EXEC_COUNT_INTERVAL == EXEC_PRINT_INTERVAL) {
     float fexec, freg, fvalid;
 
-    fexec  = (float )EXEC_COUNT / INPUT_COUNT;
-    freg   = (float )REGEX_SUCCESS_COUNT / INPUT_COUNT;
-    fvalid = (float )VALID_STRING_COUNT / INPUT_COUNT;
-
     output_current_time(stdout);
-    fprintf(stdout, ": %ld: EXEC:%.2f, REG:%.2f, VALID:%.2f\n",
-            EXEC_COUNT, fexec, freg, fvalid);
+
+    if (INPUT_COUNT != 0) { // overflow check
+      fexec  = (float )EXEC_COUNT / INPUT_COUNT;
+      freg   = (float )REGEX_SUCCESS_COUNT / INPUT_COUNT;
+      fvalid = (float )VALID_STRING_COUNT / INPUT_COUNT;
+
+      fprintf(stdout, ": %ld: EXEC:%.2f, REG:%.2f, VALID:%.2f\n",
+              EXEC_COUNT, fexec, freg, fvalid);
+    }
+    else {
+      fprintf(stdout, ": ignore (input count overflow)\n");
+    }
 
     EXEC_COUNT_INTERVAL = 0;
   }
@@ -358,11 +370,12 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
     output_current_time(stdout);
     fprintf(stdout, ": ------------ START ------------\n");
   }
+#endif
 
   return r;
 }
 
-#ifdef WITH_READ_MAIN
+#ifdef STANDALONE
 
 extern int main(int argc, char* argv[])
 {
@@ -375,4 +388,4 @@ extern int main(int argc, char* argv[])
 
   return 0;
 }
-#endif /* WITH_READ_MAIN */
+#endif /* STANDALONE */
