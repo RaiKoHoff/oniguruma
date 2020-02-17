@@ -35,6 +35,10 @@
 
 #include "regint.h"
 
+#pragma warning( push )
+#pragma warning( disable : 4018 )
+
+
 #define IS_MBC_WORD_ASCII_MODE(enc,s,end,mode) \
   ((mode) == 0 ? ONIGENC_IS_MBC_WORD(enc,s,end) : ONIGENC_IS_MBC_WORD_ASCII(enc,s,end))
 
@@ -6474,6 +6478,8 @@ onig_setup_builtin_monitors_by_ascii_encoded_name(void* fp /* FILE* */)
 
   return ONIG_NORMAL;
 }
+
+#pragma warning( pop )
 
 #endif /* ONIG_NO_PRINT */
 
