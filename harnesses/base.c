@@ -16,13 +16,27 @@
 
 #define PARSE_DEPTH_LIMIT           8
 #define RETRY_LIMIT              5000
-#define EXEC_PRINT_INTERVAL   5000000
+#define EXEC_PRINT_INTERVAL    500000
+//#define DUMP_DATA_INTERVAL     100000
+
+//#define STAT_PATH      "fuzzer.stat_log"
 
 typedef unsigned char uint8_t;
 
 
-#ifdef STANDALONE
+#ifdef DUMP_DATA_INTERVAL
+static void
+dump_file(char* path, unsigned char* data, size_t len)
+{
+  FILE* fp;
 
+  fp = fopen(path, "w");
+  fwrite(data, sizeof(unsigned char), len, fp);
+  fclose(fp);
+}
+#endif
+
+#ifdef STANDALONE
 #include <ctype.h>
 
 static void
@@ -217,11 +231,13 @@ alloc_exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
   return r;
 }
 
+#define OPTIONS_MASK  (ONIG_OPTION_IGNORECASE | ONIG_OPTION_EXTEND | ONIG_OPTION_MULTILINE | ONIG_OPTION_SINGLELINE | ONIG_OPTION_FIND_LONGEST | ONIG_OPTION_FIND_NOT_EMPTY | ONIG_OPTION_NEGATE_SINGLELINE | ONIG_OPTION_DONT_CAPTURE_GROUP | ONIG_OPTION_CAPTURE_GROUP)
+
 
 #ifdef SYNTAX_TEST
-#define NUM_CONTROL_BYTES      4
+#define NUM_CONTROL_BYTES      5
 #else
-#define NUM_CONTROL_BYTES      3
+#define NUM_CONTROL_BYTES      4
 #endif
 
 int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
@@ -271,13 +287,25 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
   int pattern_size;
   size_t remaining_size;
   unsigned char *data;
-  unsigned char options_choice;
   unsigned char pattern_size_choice;
   OnigOptionType  options;
   OnigEncoding    enc;
   OnigSyntaxType* syntax;
 
+#ifndef STANDALONE
+  static FILE* STAT_FP;
+#endif
+
   INPUT_COUNT++;
+
+#ifdef DUMP_DATA_INTERVAL
+  if (INPUT_COUNT % DUMP_DATA_INTERVAL == 0) {
+    char path[20];
+    sprintf(path, "dump-%ld", INPUT_COUNT);
+    dump_file(path, (unsigned char* )Data, Size);
+  }
+#endif
+
   if (Size < NUM_CONTROL_BYTES) return 0;
 
   remaining_size = Size;
@@ -309,8 +337,13 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
   syntax = ONIG_SYNTAX_DEFAULT;
 #endif
 
-  options_choice = data[0];
-  options = (options_choice % 2 == 0) ? ONIG_OPTION_NONE : ONIG_OPTION_IGNORECASE;
+  if ((data[1] & 0xc0) == 0)
+    options = (data[0] | (data[1] << 8)) & OPTIONS_MASK;
+  else
+    options = data[0] & ONIG_OPTION_IGNORECASE;
+
+  data++;
+  remaining_size--;
   data++;
   remaining_size--;
 
@@ -348,18 +381,27 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
   if (EXEC_COUNT_INTERVAL == EXEC_PRINT_INTERVAL) {
     float fexec, freg, fvalid;
 
-    output_current_time(stdout);
+    if (STAT_FP == 0) {
+#ifdef STAT_PATH
+      STAT_FP = fopen(STAT_PATH, "a");
+#else
+      STAT_FP = stdout;
+#endif
+    }
+
+    output_current_time(STAT_FP);
 
     if (INPUT_COUNT != 0) { // overflow check
       fexec  = (float )EXEC_COUNT / INPUT_COUNT;
       freg   = (float )REGEX_SUCCESS_COUNT / INPUT_COUNT;
       fvalid = (float )VALID_STRING_COUNT / INPUT_COUNT;
 
-      fprintf(stdout, ": %ld: EXEC:%.2f, REG:%.2f, VALID:%.2f\n",
+      fprintf(STAT_FP, ": %ld: EXEC:%.2f, REG:%.2f, VALID:%.2f\n",
               EXEC_COUNT, fexec, freg, fvalid);
+      fflush(STAT_FP);
     }
     else {
-      fprintf(stdout, ": ignore (input count overflow)\n");
+      fprintf(STAT_FP, ": ignore (input count overflow)\n");
     }
 
     EXEC_COUNT_INTERVAL = 0;
