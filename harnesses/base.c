@@ -1,6 +1,6 @@
 /*
- * base.c
- * contributed by Mark Griffin
+ * base.c  contributed by Mark Griffin
+ * Copyright (c) 2019-2020  K.Kosako
  */
 #include <stdio.h>
 #include <unistd.h>
@@ -15,14 +15,30 @@
 
 
 #define PARSE_DEPTH_LIMIT           8
-#define RETRY_LIMIT              1000
-#define EXEC_PRINT_INTERVAL   5000000
+#define RETRY_LIMIT              5000
+#define CALL_MAX_NEST_LEVEL         8
+
+#define EXEC_PRINT_INTERVAL    500000
+//#define DUMP_DATA_INTERVAL     100000
+
+//#define STAT_PATH      "fuzzer.stat_log"
 
 typedef unsigned char uint8_t;
 
 
-#ifdef STANDALONE
+#ifdef DUMP_DATA_INTERVAL
+static void
+dump_file(char* path, unsigned char* data, size_t len)
+{
+  FILE* fp;
 
+  fp = fopen(path, "w");
+  fwrite(data, sizeof(unsigned char), len, fp);
+  fclose(fp);
+}
+#endif
+
+#ifdef STANDALONE
 #include <ctype.h>
 
 static void
@@ -82,8 +98,14 @@ search(regex_t* reg, unsigned char* str, unsigned char* end)
 
   region = onig_region_new();
 
+#ifdef BACKWARD_SEARCH
+  start = end;
+  range = str;
+#else
   start = str;
   range = end;
+#endif
+
   r = onig_search(reg, str, end, start, range, region, ONIG_OPTION_NONE);
   if (r >= 0) {
 #ifdef STANDALONE
@@ -145,10 +167,11 @@ exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
   EXEC_COUNT_INTERVAL++;
 
   onig_initialize(&enc, 1);
-  onig_set_retry_limit_in_match(RETRY_LIMIT);
+  onig_set_retry_limit_in_search(RETRY_LIMIT);
 #ifdef PARSE_DEPTH_LIMIT
   onig_set_parse_depth_limit(PARSE_DEPTH_LIMIT);
 #endif
+  onig_set_subexp_call_max_nest_level(CALL_MAX_NEST_LEVEL);
 
   r = onig_new(&reg, pattern, pattern_end,
                options, enc, syntax, &einfo);
@@ -174,12 +197,10 @@ exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
   r = search(reg, pattern, pattern_end);
   if (r == -2) return -2;
 
-  if (r != ONIGERR_RETRY_LIMIT_IN_MATCH_OVER) {
-    if (onigenc_is_valid_mbc_string(enc, str, end) != 0) {
-      VALID_STRING_COUNT++;
-      r = search(reg, str, end);
-      if (r == -2) return -2;
-    }
+  if (onigenc_is_valid_mbc_string(enc, str, end) != 0) {
+    VALID_STRING_COUNT++;
+    r = search(reg, str, end);
+    if (r == -2) return -2;
   }
 
   onig_free(reg);
@@ -219,11 +240,13 @@ alloc_exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
   return r;
 }
 
+#define OPTIONS_MASK  (ONIG_OPTION_IGNORECASE | ONIG_OPTION_EXTEND | ONIG_OPTION_MULTILINE | ONIG_OPTION_SINGLELINE | ONIG_OPTION_FIND_LONGEST | ONIG_OPTION_FIND_NOT_EMPTY | ONIG_OPTION_NEGATE_SINGLELINE | ONIG_OPTION_DONT_CAPTURE_GROUP | ONIG_OPTION_CAPTURE_GROUP)
+
 
 #ifdef SYNTAX_TEST
-#define NUM_CONTROL_BYTES      4
+#define NUM_CONTROL_BYTES      5
 #else
-#define NUM_CONTROL_BYTES      3
+#define NUM_CONTROL_BYTES      4
 #endif
 
 int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
@@ -233,12 +256,44 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
     ONIG_ENCODING_UTF8,
     ONIG_ENCODING_UTF8,
     ONIG_ENCODING_UTF8,
+    ONIG_ENCODING_UTF8,
+    ONIG_ENCODING_UTF8,
+    ONIG_ENCODING_UTF8,
+    ONIG_ENCODING_UTF8,
+    ONIG_ENCODING_UTF8,
+    ONIG_ENCODING_ASCII,
+    ONIG_ENCODING_EUC_JP,
+    ONIG_ENCODING_EUC_TW,
+    ONIG_ENCODING_EUC_KR,
+    ONIG_ENCODING_EUC_CN,
     ONIG_ENCODING_SJIS,
-    //ONIG_ENCODING_EUC_JP,
-    ONIG_ENCODING_ISO_8859_1,
+    ONIG_ENCODING_KOI8_R,
+    ONIG_ENCODING_CP1251,
     ONIG_ENCODING_BIG5,
     ONIG_ENCODING_GB18030,
-    ONIG_ENCODING_EUC_TW
+    ONIG_ENCODING_UTF8,
+    ONIG_ENCODING_UTF8,
+    ONIG_ENCODING_UTF8,
+    ONIG_ENCODING_UTF8,
+    ONIG_ENCODING_UTF8,
+    ONIG_ENCODING_UTF8,
+    ONIG_ENCODING_UTF8,
+    ONIG_ENCODING_UTF8,
+    ONIG_ENCODING_ISO_8859_1,
+    ONIG_ENCODING_ISO_8859_2,
+    ONIG_ENCODING_ISO_8859_3,
+    ONIG_ENCODING_ISO_8859_4,
+    ONIG_ENCODING_ISO_8859_5,
+    ONIG_ENCODING_ISO_8859_6,
+    ONIG_ENCODING_ISO_8859_7,
+    ONIG_ENCODING_ISO_8859_8,
+    ONIG_ENCODING_ISO_8859_9,
+    ONIG_ENCODING_ISO_8859_10,
+    ONIG_ENCODING_ISO_8859_11,
+    ONIG_ENCODING_ISO_8859_13,
+    ONIG_ENCODING_ISO_8859_14,
+    ONIG_ENCODING_ISO_8859_15,
+    ONIG_ENCODING_ISO_8859_16
   };
   unsigned char encoding_choice;
 #endif
@@ -273,13 +328,25 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
   int pattern_size;
   size_t remaining_size;
   unsigned char *data;
-  unsigned char options_choice;
   unsigned char pattern_size_choice;
   OnigOptionType  options;
   OnigEncoding    enc;
   OnigSyntaxType* syntax;
 
+#ifndef STANDALONE
+  static FILE* STAT_FP;
+#endif
+
   INPUT_COUNT++;
+
+#ifdef DUMP_DATA_INTERVAL
+  if (INPUT_COUNT % DUMP_DATA_INTERVAL == 0) {
+    char path[20];
+    sprintf(path, "dump-%ld", INPUT_COUNT);
+    dump_file(path, (unsigned char* )Data, Size);
+  }
+#endif
+
   if (Size < NUM_CONTROL_BYTES) return 0;
 
   remaining_size = Size;
@@ -311,8 +378,13 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
   syntax = ONIG_SYNTAX_DEFAULT;
 #endif
 
-  options_choice = data[0];
-  options = (options_choice % 2 == 0) ? ONIG_OPTION_NONE : ONIG_OPTION_IGNORECASE;
+  if ((data[1] & 0xc0) == 0)
+    options = (data[0] | (data[1] << 8)) & OPTIONS_MASK;
+  else
+    options = data[0] & ONIG_OPTION_IGNORECASE;
+
+  data++;
+  remaining_size--;
   data++;
   remaining_size--;
 
@@ -350,18 +422,27 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
   if (EXEC_COUNT_INTERVAL == EXEC_PRINT_INTERVAL) {
     float fexec, freg, fvalid;
 
-    output_current_time(stdout);
+    if (STAT_FP == 0) {
+#ifdef STAT_PATH
+      STAT_FP = fopen(STAT_PATH, "a");
+#else
+      STAT_FP = stdout;
+#endif
+    }
+
+    output_current_time(STAT_FP);
 
     if (INPUT_COUNT != 0) { // overflow check
       fexec  = (float )EXEC_COUNT / INPUT_COUNT;
       freg   = (float )REGEX_SUCCESS_COUNT / INPUT_COUNT;
       fvalid = (float )VALID_STRING_COUNT / INPUT_COUNT;
 
-      fprintf(stdout, ": %ld: EXEC:%.2f, REG:%.2f, VALID:%.2f\n",
+      fprintf(STAT_FP, ": %ld: EXEC:%.2f, REG:%.2f, VALID:%.2f\n",
               EXEC_COUNT, fexec, freg, fvalid);
+      fflush(STAT_FP);
     }
     else {
-      fprintf(stdout, ": ignore (input count overflow)\n");
+      fprintf(STAT_FP, ": ignore (input count overflow)\n");
     }
 
     EXEC_COUNT_INTERVAL = 0;
