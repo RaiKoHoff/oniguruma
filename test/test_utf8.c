@@ -682,6 +682,13 @@ extern int main(int argc, char* argv[])
 
   x2("(?~)", "", 0, 0);
   x2("(?~)", "A", 0, 0);
+  x2("(?~ab)", "abc", 0, 0);
+  x2("(?~abc)", "abc", 0, 0);
+  x2("(?~abc|ab)", "abc", 0, 0);
+  x2("(?~ab|abc)", "abc", 0, 0);
+  x2("(?~a.c)", "abc", 0, 0);
+  x2("(?~a.c|ab)", "abc", 0, 0);
+  x2("(?~ab|a.c)", "abc", 0, 0);
   x2("aaaaa(?~)", "aaaaaaaaaa", 0, 5);
   x2("(?~(?:|aaa))", "aaa", 0, 0);
   x2("(?~aaa|)", "aaa", 0, 0);
@@ -1316,6 +1323,9 @@ extern int main(int argc, char* argv[])
   n("(?<!v|t|^a+.*[efg])z", "abcdfz");
   n("(?<!^(?:v|t|a+.*[efg]))z", "abcdfz");
   x2("(?<!v|^t|^a+.*[efg])z", "uabcdfz", 6, 7);
+  n("(\\k<2>)|(?<=(\\k<1>))", "");
+  x2("(a|\\k<2>)|(?<=(\\k<1>))", "a", 0, 1);
+  x2("(a|\\k<2>)|(?<=b(\\k<1>))", "ba", 1, 2);
 
   x2("((?(a)\\g<1>|b))", "aab", 0, 3);
   x2("((?(a)\\g<1>))", "aab", 0, 2);
