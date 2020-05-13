@@ -10,21 +10,36 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <time.h>
-
 #include "oniguruma.h"
 
-
 #define PARSE_DEPTH_LIMIT           8
-#define RETRY_LIMIT              5000
 #define CALL_MAX_NEST_LEVEL         8
+#define BASE_RETRY_LIMIT        10000
+#define BASE_LENGTH              2048
+#define MAX_REM_SIZE          1048576
 
-#define EXEC_PRINT_INTERVAL    500000
+//#define EXEC_PRINT_INTERVAL    500000
 //#define DUMP_DATA_INTERVAL     100000
-
-//#define STAT_PATH      "fuzzer.stat_log"
+//#define STAT_PATH              "fuzzer.stat_log"
 
 typedef unsigned char uint8_t;
 
+#ifdef DUMP_INPUT
+static void
+dump_input(unsigned char* data, size_t len)
+{
+  static FILE* DumpFp;
+  static char end[] = { 'E', 'N', 'D' };
+
+  if (DumpFp == 0)
+    DumpFp = fopen("dump-input", "w");
+
+  fseek(DumpFp, 0, SEEK_SET);
+  fwrite(data, sizeof(unsigned char), len, DumpFp);
+  fwrite(end,  sizeof(char), sizeof(end), DumpFp);
+  fflush(DumpFp);
+}
+#endif
 
 #ifdef DUMP_DATA_INTERVAL
 static void
@@ -90,21 +105,32 @@ output_current_time(FILE* fp)
 #endif
 
 static int
-search(regex_t* reg, unsigned char* str, unsigned char* end)
+search(regex_t* reg, unsigned char* str, unsigned char* end, int backward)
 {
   int r;
   unsigned char *start, *range;
   OnigRegion *region;
+  unsigned int retry_limit;
+  size_t len;
 
   region = onig_region_new();
 
-#ifdef BACKWARD_SEARCH
-  start = end;
-  range = str;
-#else
-  start = str;
-  range = end;
-#endif
+  len = (size_t )(end - str);
+  if (len < BASE_LENGTH)
+    retry_limit = (unsigned int )BASE_RETRY_LIMIT;
+  else
+    retry_limit = (unsigned int )(BASE_RETRY_LIMIT * BASE_LENGTH / len);
+
+  onig_set_retry_limit_in_search(retry_limit);
+
+  if (backward != 0) {
+    start = end;
+    range = str;
+  }
+  else {
+    start = str;
+    range = end;
+  }
 
   r = onig_search(reg, str, end, start, range, region, ONIG_OPTION_NONE);
   if (r >= 0) {
@@ -154,7 +180,7 @@ static long VALID_STRING_COUNT;
 
 static int
 exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
-     char* apattern, char* apattern_end, char* astr, UChar* end)
+     char* apattern, char* apattern_end, char* astr, UChar* end, int backward)
 {
   int r;
   regex_t* reg;
@@ -167,7 +193,6 @@ exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
   EXEC_COUNT_INTERVAL++;
 
   onig_initialize(&enc, 1);
-  onig_set_retry_limit_in_search(RETRY_LIMIT);
 #ifdef PARSE_DEPTH_LIMIT
   onig_set_parse_depth_limit(PARSE_DEPTH_LIMIT);
 #endif
@@ -194,12 +219,12 @@ exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
   }
   REGEX_SUCCESS_COUNT++;
 
-  r = search(reg, pattern, pattern_end);
+  r = search(reg, pattern, pattern_end, backward);
   if (r == -2) return -2;
 
   if (onigenc_is_valid_mbc_string(enc, str, end) != 0) {
     VALID_STRING_COUNT++;
-    r = search(reg, str, end);
+    r = search(reg, str, end, backward);
     if (r == -2) return -2;
   }
 
@@ -210,30 +235,30 @@ exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
 
 static int
 alloc_exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
-           int pattern_size, size_t remaining_size, unsigned char *data)
+           int backward, int pattern_size, size_t rem_size, unsigned char *data)
 {
   int r;
   unsigned char *pattern_end;
   unsigned char *str_null_end;
 
-  // copy first PATTERN_SIZE bytes off to be the pattern
   unsigned char *pattern = (unsigned char *)malloc(pattern_size != 0 ? pattern_size : 1);
   memcpy(pattern, data, pattern_size);
   pattern_end = pattern + pattern_size;
   data += pattern_size;
-  remaining_size -= pattern_size;
+  rem_size -= pattern_size;
+  if (rem_size > MAX_REM_SIZE) rem_size = MAX_REM_SIZE;
 
 #if defined(UTF16_BE) || defined(UTF16_LE)
-  if (remaining_size % 2 == 1) remaining_size--;
+  if (rem_size % 2 == 1) rem_size--;
 #endif
 
-  unsigned char *str = (unsigned char*)malloc(remaining_size != 0 ? remaining_size : 1);
-  memcpy(str, data, remaining_size);
-  str_null_end = str + remaining_size;
+  unsigned char *str = (unsigned char*)malloc(rem_size != 0 ? rem_size : 1);
+  memcpy(str, data, rem_size);
+  str_null_end = str + rem_size;
 
   r = exec(enc, options, syntax,
            (char *)pattern, (char *)pattern_end,
-           (char *)str, str_null_end);
+           (char *)str, str_null_end, backward);
 
   free(pattern);
   free(str);
@@ -244,9 +269,9 @@ alloc_exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
 
 
 #ifdef SYNTAX_TEST
-#define NUM_CONTROL_BYTES      5
+#define NUM_CONTROL_BYTES      6
 #else
-#define NUM_CONTROL_BYTES      4
+#define NUM_CONTROL_BYTES      5
 #endif
 
 int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
@@ -325,8 +350,9 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
 #endif
 
   int r;
+  int backward;
   int pattern_size;
-  size_t remaining_size;
+  size_t rem_size;
   unsigned char *data;
   unsigned char pattern_size_choice;
   OnigOptionType  options;
@@ -349,7 +375,7 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
 
   if (Size < NUM_CONTROL_BYTES) return 0;
 
-  remaining_size = Size;
+  rem_size = Size;
   data = (unsigned char* )(Data);
 
 #ifdef UTF16_BE
@@ -360,7 +386,7 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
 #else
   encoding_choice = data[0];
   data++;
-  remaining_size--;
+  rem_size--;
 
   int num_encodings = sizeof(encodings)/sizeof(encodings[0]);
   enc = encodings[encoding_choice % num_encodings];
@@ -370,7 +396,7 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
 #ifdef SYNTAX_TEST
   syntax_choice = data[0];
   data++;
-  remaining_size--;
+  rem_size--;
 
   int num_syntaxes = sizeof(syntaxes)/sizeof(syntaxes[0]);
   syntax = syntaxes[syntax_choice % num_syntaxes];
@@ -384,18 +410,22 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
     options = data[0] & ONIG_OPTION_IGNORECASE;
 
   data++;
-  remaining_size--;
+  rem_size--;
   data++;
-  remaining_size--;
+  rem_size--;
 
   pattern_size_choice = data[0];
   data++;
-  remaining_size--;
+  rem_size--;
 
-  if (remaining_size == 0)
+  backward = (data[0] == 0xbb);
+  data++;
+  rem_size--;
+
+  if (rem_size == 0)
     pattern_size = 0;
   else {
-    pattern_size = (int )pattern_size_choice % remaining_size;
+    pattern_size = (int )pattern_size_choice % rem_size;
 #if defined(UTF16_BE) || defined(UTF16_LE)
     if (pattern_size % 2 == 1) pattern_size--;
 #endif
@@ -404,21 +434,28 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
 #ifdef STANDALONE
   dump_data(stdout, data, pattern_size);
 #ifdef SYNTAX_TEST
-  fprintf(stdout, "enc: %s, syntax: %s, options: %u, pattern_size: %d\n",
+  fprintf(stdout,
+          "enc: %s, syntax: %s, options: %u, pattern_size: %d, back:%d\n",
           ONIGENC_NAME(enc),
           syntax_names[syntax_choice % num_syntaxes],
           options,
-          pattern_size);
+          pattern_size, backward);
 #else
-  fprintf(stdout, "enc: %s, options: %u, pattern_size: %d\n",
-          ONIGENC_NAME(enc), options, pattern_size);
+  fprintf(stdout, "enc: %s, options: %u, pattern_size: %d, back:%d\n",
+          ONIGENC_NAME(enc), options, pattern_size, backward);
 #endif
 #endif
 
-  r = alloc_exec(enc, options, syntax, pattern_size, remaining_size, data);
+#ifdef DUMP_INPUT
+  dump_input((unsigned char* )Data, Size);
+#endif
+
+  r = alloc_exec(enc, options, syntax, backward, pattern_size,
+                 rem_size, data);
   if (r == -2) exit(-2);
 
 #ifndef STANDALONE
+#ifdef EXEC_PRINT_INTERVAL
   if (EXEC_COUNT_INTERVAL == EXEC_PRINT_INTERVAL) {
     float fexec, freg, fvalid;
 
@@ -452,16 +489,19 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
     fprintf(stdout, ": ------------ START ------------\n");
   }
 #endif
+#endif
 
   return r;
 }
 
 #ifdef STANDALONE
 
+#define MAX_INPUT_DATA_SIZE  4194304
+
 extern int main(int argc, char* argv[])
 {
   size_t n;
-  uint8_t Data[10000];
+  uint8_t Data[MAX_INPUT_DATA_SIZE];
 
   n = read(0, Data, sizeof(Data));
   fprintf(stdout, "n: %ld\n", n);

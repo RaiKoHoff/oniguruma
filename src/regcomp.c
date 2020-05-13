@@ -657,8 +657,11 @@ static void
 mmcl_alt_merge(MinMaxCharLen* to, MinMaxCharLen* alt)
 {
   if (to->min > alt->min) {
-    to->min = alt->min;
-    if (alt->min_is_sure != 0)
+    to->min         = alt->min;
+    to->min_is_sure = alt->min_is_sure;
+  }
+  else if (to->min == alt->min) {
+    if (alt->min_is_sure != FALSE)
       to->min_is_sure = TRUE;
   }
 
@@ -829,14 +832,21 @@ node_char_len1(Node* node, regex_t* reg, MinMaxCharLen* ci, ScanEnv* env,
                            NODE_IS_FIXED_CLEN_MIN_SURE(node));
         }
         else {
-          r = node_char_len1(NODE_BODY(node), reg, ci, env, level);
-          if (r < 0) break;
+          if (NODE_IS_MARK1(node)) {
+            mmcl_set_min_max(ci, 0, INFINITE_LEN, FALSE);
+          }
+          else {
+            NODE_STATUS_ADD(node, MARK1);
+            r = node_char_len1(NODE_BODY(node), reg, ci, env, level);
+            NODE_STATUS_REMOVE(node, MARK1);
+            if (r < 0) break;
 
-          en->min_char_len = ci->min;
-          en->max_char_len = ci->max;
-          NODE_STATUS_ADD(node, FIXED_CLEN);
-          if (ci->min_is_sure != 0)
-            NODE_STATUS_ADD(node, FIXED_CLEN_MIN_SURE);
+            en->min_char_len = ci->min;
+            en->max_char_len = ci->max;
+            NODE_STATUS_ADD(node, FIXED_CLEN);
+            if (ci->min_is_sure != 0)
+              NODE_STATUS_ADD(node, FIXED_CLEN_MIN_SURE);
+          }
         }
         /* can't optimize look-behind if capture exists. */
         ci->min_is_sure = FALSE;
@@ -876,15 +886,15 @@ node_char_len1(Node* node, regex_t* reg, MinMaxCharLen* ci, ScanEnv* env,
     }
     break;
 
+  case NODE_GIMMICK:
+    mmcl_set(ci, 0);
+    break;
+
   case NODE_ANCHOR:
+  zero:
     mmcl_set(ci, 0);
     /* can't optimize look-behind if anchor exists. */
     ci->min_is_sure = FALSE;
-    break;
-
-  case NODE_GIMMICK:
-  zero:
-    mmcl_set(ci, 0);
     break;
 
   case NODE_BACKREF:
@@ -3540,7 +3550,9 @@ check_node_in_look_behind(Node* node, int not, int* used)
       if (r != 0) break;
 
       if (en->type == BAG_MEMORY) {
-        if (NODE_IS_BACKREF(node) || NODE_IS_CALLED(node)) *used = TRUE;
+        if (NODE_IS_BACKREF(node) || NODE_IS_CALLED(node)
+         || NODE_IS_REFERENCED(node))
+          *used = TRUE;
       }
       else if (en->type == BAG_IF_ELSE) {
         if (IS_NOT_NULL(en->te.Then)) {
@@ -5215,7 +5227,7 @@ quantifiers_memory_node_info(Node* node)
 __inline
 #endif
 static int
-tune_call_node_call(CallNode* cn, ScanEnv* env, int state)
+check_call_reference(CallNode* cn, ScanEnv* env, int state)
 {
   MemEnv* mem_env = SCANENV_MEMENV(env);
 
@@ -5241,6 +5253,8 @@ tune_call_node_call(CallNode* cn, ScanEnv* env, int state)
                                      cn->name, cn->name_end);
       return ONIGERR_UNDEFINED_NAME_REFERENCE;
     }
+
+    NODE_STATUS_ADD(NODE_CALL_BODY(cn), REFERENCED);
   }
   else {
     int *refs;
@@ -5390,7 +5404,7 @@ tune_call(Node* node, ScanEnv* env, int state)
       CALL_(node)->entry_count--;
     }
 
-    r = tune_call_node_call(CALL_(node), env, state);
+    r = check_call_reference(CALL_(node), env, state);
     break;
 
   default:
@@ -7728,14 +7742,18 @@ print_indent_tree(FILE* f, Node* node, int indent)
     break;
 
   case NODE_CCLASS:
+#define CCLASS_MBUF_MAX_OUTPUT_NUM   10
+
     fprintf(f, "<cclass:%p>", node);
     if (IS_NCCLASS_NOT(CCLASS_(node))) fputs(" not", f);
     if (CCLASS_(node)->mbuf) {
       BBuf* bbuf = CCLASS_(node)->mbuf;
-      for (i = 0; i < bbuf->used; i++) {
+      fprintf(f, " mbuf(%u) ", bbuf->used);
+      for (i = 0; i < bbuf->used && i < CCLASS_MBUF_MAX_OUTPUT_NUM; i++) {
         if (i > 0) fprintf(f, ",");
         fprintf(f, "%0x", bbuf->p[i]);
       }
+      if (i < bbuf->used) fprintf(f, "...");
     }
     break;
 
@@ -7875,6 +7893,8 @@ print_indent_tree(FILE* f, Node* node, int indent)
       fprintf(f, "memory:%d", BAG_(node)->m.regnum);
       if (NODE_IS_CALLED(node))
         fprintf(f, ", called");
+      else if (NODE_IS_REFERENCED(node))
+        fprintf(f, ", referenced");
       if (NODE_IS_FIXED_ADDR(node))
         fprintf(f, ", fixed-addr");
       break;
