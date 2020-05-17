@@ -22,6 +22,9 @@
 //#define DUMP_DATA_INTERVAL     100000
 //#define STAT_PATH              "fuzzer.stat_log"
 
+#define ADJUST_LEN(enc, len) \
+  if (ONIGENC_MBC_MINLEN(enc) == 2 && len % 2 == 1) len--
+
 typedef unsigned char uint8_t;
 
 #ifdef DUMP_INPUT
@@ -248,9 +251,7 @@ alloc_exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
   rem_size -= pattern_size;
   if (rem_size > MAX_REM_SIZE) rem_size = MAX_REM_SIZE;
 
-#if defined(UTF16_BE) || defined(UTF16_LE)
-  if (rem_size % 2 == 1) rem_size--;
-#endif
+  ADJUST_LEN(enc, rem_size);
 
   unsigned char *str = (unsigned char*)malloc(rem_size != 0 ? rem_size : 1);
   memcpy(str, data, rem_size);
@@ -296,14 +297,14 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
     ONIG_ENCODING_CP1251,
     ONIG_ENCODING_BIG5,
     ONIG_ENCODING_GB18030,
-    ONIG_ENCODING_UTF8,
-    ONIG_ENCODING_UTF8,
-    ONIG_ENCODING_UTF8,
-    ONIG_ENCODING_UTF8,
-    ONIG_ENCODING_UTF8,
-    ONIG_ENCODING_UTF8,
-    ONIG_ENCODING_UTF8,
-    ONIG_ENCODING_UTF8,
+    ONIG_ENCODING_UTF16_BE,
+    ONIG_ENCODING_UTF16_LE,
+    ONIG_ENCODING_UTF16_BE,
+    ONIG_ENCODING_UTF16_LE,
+    ONIG_ENCODING_UTF16_BE,
+    ONIG_ENCODING_UTF16_LE,
+    ONIG_ENCODING_UTF16_BE,
+    ONIG_ENCODING_UTF16_LE,
     ONIG_ENCODING_ISO_8859_1,
     ONIG_ENCODING_ISO_8859_2,
     ONIG_ENCODING_ISO_8859_3,
@@ -426,9 +427,7 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
     pattern_size = 0;
   else {
     pattern_size = (int )pattern_size_choice % rem_size;
-#if defined(UTF16_BE) || defined(UTF16_LE)
-    if (pattern_size % 2 == 1) pattern_size--;
-#endif
+    ADJUST_LEN(enc, pattern_size);
   }
 
 #ifdef STANDALONE
