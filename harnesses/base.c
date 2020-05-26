@@ -17,13 +17,16 @@
 #define BASE_RETRY_LIMIT        10000
 #define BASE_LENGTH              2048
 #define MAX_REM_SIZE          1048576
+#define MAX_SLOW_REM_SIZE        8192
 
 //#define EXEC_PRINT_INTERVAL    500000
 //#define DUMP_DATA_INTERVAL     100000
 //#define STAT_PATH              "fuzzer.stat_log"
 
-#define ADJUST_LEN(enc, len) \
-  if (ONIGENC_MBC_MINLEN(enc) == 2 && len % 2 == 1) len--
+#define ADJUST_LEN(enc, len) do {\
+  int mlen = ONIGENC_MBC_MINLEN(enc);\
+  if (mlen != 1) { len -= len % mlen; }\
+} while (0)
 
 typedef unsigned char uint8_t;
 
@@ -240,16 +243,25 @@ static int
 alloc_exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
            int backward, int pattern_size, size_t rem_size, unsigned char *data)
 {
+  extern int onig_detect_can_be_very_slow_pattern(const UChar* pattern, const UChar* pattern_end, OnigOptionType option, OnigEncoding enc, OnigSyntaxType* syntax);
+
   int r;
   unsigned char *pattern_end;
   unsigned char *str_null_end;
 
   unsigned char *pattern = (unsigned char *)malloc(pattern_size != 0 ? pattern_size : 1);
+
   memcpy(pattern, data, pattern_size);
   pattern_end = pattern + pattern_size;
   data += pattern_size;
   rem_size -= pattern_size;
+
   if (rem_size > MAX_REM_SIZE) rem_size = MAX_REM_SIZE;
+
+  if (rem_size > MAX_SLOW_REM_SIZE) {
+    r = onig_detect_can_be_very_slow_pattern(pattern, pattern_end, options, enc, syntax);
+    if (r > 0) rem_size = MAX_SLOW_REM_SIZE;
+  }
 
   ADJUST_LEN(enc, rem_size);
 
@@ -301,10 +313,10 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
     ONIG_ENCODING_UTF16_LE,
     ONIG_ENCODING_UTF16_BE,
     ONIG_ENCODING_UTF16_LE,
-    ONIG_ENCODING_UTF16_BE,
-    ONIG_ENCODING_UTF16_LE,
-    ONIG_ENCODING_UTF16_BE,
-    ONIG_ENCODING_UTF16_LE,
+    ONIG_ENCODING_UTF32_BE,
+    ONIG_ENCODING_UTF32_LE,
+    ONIG_ENCODING_UTF32_BE,
+    ONIG_ENCODING_UTF32_LE,
     ONIG_ENCODING_ISO_8859_1,
     ONIG_ENCODING_ISO_8859_2,
     ONIG_ENCODING_ISO_8859_3,
@@ -423,6 +435,10 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
   data++;
   rem_size--;
 
+  if (backward != 0) {
+    options = options & ~ONIG_OPTION_FIND_LONGEST;
+  }
+
   if (rem_size == 0)
     pattern_size = 0;
   else {
@@ -499,13 +515,21 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
 
 extern int main(int argc, char* argv[])
 {
+  size_t max_size;
   size_t n;
   uint8_t Data[MAX_INPUT_DATA_SIZE];
 
-  n = read(0, Data, sizeof(Data));
-  fprintf(stdout, "n: %ld\n", n);
-  LLVMFuzzerTestOneInput(Data, n);
+  if (argc > 1) {
+    max_size = (size_t )atoi(argv[1]);
+  }
+  else {
+    max_size = sizeof(Data);
+  }
 
+  n = read(0, Data, max_size);
+  fprintf(stdout, "read size: %ld, max_size: %ld\n", n, max_size);
+
+  LLVMFuzzerTestOneInput(Data, n);
   return 0;
 }
 #endif /* STANDALONE */

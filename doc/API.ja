@@ -1,4 +1,4 @@
-鬼車インターフェース Version 6.9.5   2020/03/25
+鬼車インターフェース Version 6.9.6   2020/05/20
 
 #include <oniguruma.h>
 
@@ -93,6 +93,8 @@
                                       word)
       ONIG_OPTION_TEXT_SEGMENT_EXTENDED_GRAPHEME_CLUSTER  拡張書記素房モード
       ONIG_OPTION_TEXT_SEGMENT_WORD                       単語モード
+
+      * ONIG_OPTION_FIND_LONGEST はonig_search()の後方探索では正しく動作しない
 
   5 enc:        文字エンコーディング
 
@@ -331,7 +333,6 @@
 
     ONIG_OPTION_NOTBOL        文字列の先頭(str)を行頭と看做さない
     ONIG_OPTION_NOTEOL        文字列の終端(end)を行末と看做さない
-    ONIG_OPTION_POSIX_REGION  region引数をPOSIX APIのregmatch_t[]にする
 
 
 # int onig_search_with_param(regex_t* reg, const UChar* str, const UChar* end,
@@ -365,7 +366,6 @@
 
     ONIG_OPTION_NOTBOL        文字列の先頭(str)を行頭と看做さない
     ONIG_OPTION_NOTEOL        文字列の終端(end)を行末と看做さない
-    ONIG_OPTION_POSIX_REGION  region引数をPOSIX APIのregmatch_t[]にする
 
 
 # int onig_match_with_param(regex_t* reg, const UChar* str, const UChar* end,
