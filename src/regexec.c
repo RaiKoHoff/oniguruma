@@ -46,15 +46,15 @@
 
 #define CHECK_INTERRUPT_IN_MATCH
 
-#define STACK_MEM_START(reg, i) \
-  (MEM_STATUS_AT((reg)->push_mem_start, (i)) != 0 ? \
-   STACK_AT(mem_start_stk[i])->u.mem.pstr : (UChar* )((void* )(mem_start_stk[i])))
+#define STACK_MEM_START(reg, idx) \
+  (MEM_STATUS_AT((reg)->push_mem_start, (idx)) != 0 ? \
+   STACK_AT(mem_start_stk[idx].i)->u.mem.pstr : mem_start_stk[idx].s)
 
-#define STACK_MEM_END(reg, i) \
-  (MEM_STATUS_AT((reg)->push_mem_end, (i)) != 0 ? \
-   STACK_AT(mem_end_stk[i])->u.mem.pstr : (UChar* )((void* )(mem_end_stk[i])))
+#define STACK_MEM_END(reg, idx) \
+  (MEM_STATUS_AT((reg)->push_mem_end, (idx)) != 0 ? \
+   STACK_AT(mem_end_stk[idx].i)->u.mem.pstr : mem_end_stk[idx].s)
 
-static int forward_search(regex_t* reg, const UChar* str, const UChar* end, UChar* start, UChar* range, UChar** low, UChar** high, UChar** low_prev);
+static int forward_search(regex_t* reg, const UChar* str, const UChar* end, UChar* start, UChar* range, UChar** low, UChar** high);
 
 static int
 search_in_range(regex_t* reg, const UChar* str, const UChar* end, const UChar* start, const UChar* range, /* match range */ const UChar* data_range, /* subject string range */ OnigRegion* region, OnigOptionType option, OnigMatchParam* mp);
@@ -1060,9 +1060,6 @@ onig_region_copy(OnigRegion* to, OnigRegion* from)
 
 
 /** stack **/
-static char TIS_INVALID_STACK;
-#define INVALID_STACK_INDEX   ((intptr_t)(&TIS_INVALID_STACK))
-
 #define STK_ALT_FLAG               0x0001
 
 /* stack type */
@@ -1103,7 +1100,15 @@ static char TIS_INVALID_STACK;
 #define STK_MASK_TO_VOID_TARGET    0x100e
 #define STK_MASK_MEM_END_OR_MARK   0x8000  /* MEM_END or MEM_END_MARK */
 
-typedef intptr_t StackIndex;
+typedef ssize_t StackIndex;
+
+#define INVALID_STACK_INDEX   ((StackIndex )-1)
+
+typedef union {
+  StackIndex i;
+  UChar*     s;
+} StkPtrType;
+
 
 typedef struct _StackType {
   unsigned int type;
@@ -1122,8 +1127,8 @@ typedef struct _StackType {
     struct {
       UChar *pstr;       /* start/end position */
       /* Following information is set, if this stack type is MEM-START */
-      StackIndex prev_start;  /* prev. info (for backtrack  "(...)*" ) */
-      StackIndex prev_end;    /* prev. info (for backtrack  "(...)*" ) */
+      StkPtrType prev_start;  /* prev. info (for backtrack  "(...)*" ) */
+      StkPtrType prev_end;    /* prev. info (for backtrack  "(...)*" ) */
     } mem;
     struct {
       UChar *pstr;            /* start position */
@@ -1169,8 +1174,8 @@ struct OnigCalloutArgsStruct {
   MatchArg*   msa;
   StackType*  stk_base;
   StackType*  stk;
-  StackIndex* mem_start_stk;
-  StackIndex* mem_end_stk;
+  StkPtrType* mem_start_stk;
+  StkPtrType* mem_end_stk;
 };
 
 #endif
@@ -1181,7 +1186,7 @@ struct OnigCalloutArgsStruct {
 #define UPDATE_FOR_STACK_REALLOC do{\
   repeat_stk      = (StackIndex* )alloc_base;\
   empty_check_stk = (StackIndex* )(repeat_stk + reg->num_repeat);\
-  mem_start_stk   = (StackIndex* )(empty_check_stk + reg->num_empty_check);\
+  mem_start_stk   = (StkPtrType* )(empty_check_stk + reg->num_empty_check);\
   mem_end_stk     = mem_start_stk + num_mem + 1;\
 } while(0)
 
@@ -1197,7 +1202,7 @@ struct OnigCalloutArgsStruct {
 
 #define PTR_NUM_SIZE(reg)  (((reg)->num_mem + 1) * 2)
 #define UPDATE_FOR_STACK_REALLOC do{\
-  mem_start_stk = (StackIndex* )alloc_base;\
+  mem_start_stk = (StkPtrType* )alloc_base;\
   mem_end_stk   = mem_start_stk + num_mem + 1;\
 } while(0)
 
@@ -1267,27 +1272,27 @@ struct OnigCalloutArgsStruct {
     is_alloca  = 0;\
     alloc_base = msa->stack_p;\
     stk_base   = (StackType* )(alloc_base\
-                 + (sizeof(StackIndex) * msa->ptr_num));\
+                 + (sizeof(StkPtrType) * msa->ptr_num));\
     stk        = stk_base;\
     stk_end    = stk_base + msa->stack_n;\
   }\
   else if (msa->ptr_num > ALLOCA_PTR_NUM_LIMIT) {\
     is_alloca  = 0;\
-    alloc_base = (char* )xmalloc(sizeof(StackIndex) * msa->ptr_num\
+    alloc_base = (char* )xmalloc(sizeof(StkPtrType) * msa->ptr_num\
                   + sizeof(StackType) * (stack_num));\
     CHECK_NULL_RETURN_MEMERR(alloc_base);\
     stk_base   = (StackType* )(alloc_base\
-                 + (sizeof(StackIndex) * msa->ptr_num));\
+                 + (sizeof(StkPtrType) * msa->ptr_num));\
     stk        = stk_base;\
     stk_end    = stk_base + (stack_num);\
   }\
   else {\
     is_alloca  = 1;\
-    alloc_base = (char* )xalloca(sizeof(StackIndex) * msa->ptr_num\
+    alloc_base = (char* )xalloca(sizeof(StkPtrType) * msa->ptr_num\
                  + sizeof(StackType) * (stack_num));\
     CHECK_NULL_RETURN_MEMERR(alloc_base);\
     stk_base   = (StackType* )(alloc_base\
-                 + (sizeof(StackIndex) * msa->ptr_num));\
+                 + (sizeof(StkPtrType) * msa->ptr_num));\
     stk        = stk_base;\
     stk_end    = stk_base + (stack_num);\
   }\
@@ -1297,7 +1302,7 @@ struct OnigCalloutArgsStruct {
 #define STACK_SAVE(msa,is_alloca,alloc_base) do{\
   (msa)->stack_n = (int )(stk_end - stk_base);\
   if ((is_alloca) != 0) {\
-    size_t size = sizeof(StackIndex) * (msa)->ptr_num\
+    size_t size = sizeof(StkPtrType) * (msa)->ptr_num\
                 + sizeof(StackType) * (msa)->stack_n;\
     (msa)->stack_p = xmalloc(size);\
     CHECK_NULL_RETURN_MEMERR((msa)->stack_p);\
@@ -1664,9 +1669,9 @@ stack_double(int* is_alloca, char** arg_alloc_base,
   stk      = *arg_stk;
 
   n = (unsigned int )(stk_end - stk_base);
-  size = sizeof(StackIndex) * msa->ptr_num + sizeof(StackType) * n;
+  size = sizeof(StkPtrType) * msa->ptr_num + sizeof(StackType) * n;
   n *= 2;
-  new_size = sizeof(StackIndex) * msa->ptr_num + sizeof(StackType) * n;
+  new_size = sizeof(StkPtrType) * msa->ptr_num + sizeof(StackType) * n;
   if (*is_alloca != 0) {
     new_alloc_base = (char* )xmalloc(new_size);
     if (IS_NULL(new_alloc_base)) {
@@ -1696,7 +1701,7 @@ stack_double(int* is_alloca, char** arg_alloc_base,
   used = (int )(stk - stk_base);
   *arg_alloc_base = alloc_base;
   *arg_stk_base   = (StackType* )(alloc_base
-                                  + (sizeof(StackIndex) * msa->ptr_num));
+                                  + (sizeof(StkPtrType) * msa->ptr_num));
   *arg_stk      = *arg_stk_base + used;
   *arg_stk_end  = *arg_stk_base + n;
   return 0;
@@ -1790,8 +1795,8 @@ stack_double(int* is_alloca, char** arg_alloc_base,
   stk->u.mem.pstr       = (s);\
   stk->u.mem.prev_start = mem_start_stk[mnum];\
   stk->u.mem.prev_end   = mem_end_stk[mnum];\
-  mem_start_stk[mnum]   = GET_STACK_INDEX(stk);\
-  mem_end_stk[mnum]     = INVALID_STACK_INDEX;\
+  mem_start_stk[mnum].i = GET_STACK_INDEX(stk);\
+  mem_end_stk[mnum].i   = INVALID_STACK_INDEX;\
   STACK_INC;\
 } while(0)
 
@@ -1802,7 +1807,7 @@ stack_double(int* is_alloca, char** arg_alloc_base,
   stk->u.mem.pstr       = (s);\
   stk->u.mem.prev_start = mem_start_stk[mnum];\
   stk->u.mem.prev_end   = mem_end_stk[mnum];\
-  mem_end_stk[mnum] = GET_STACK_INDEX(stk);\
+  mem_end_stk[mnum].i   = GET_STACK_INDEX(stk);\
   STACK_INC;\
 } while(0)
 
@@ -2155,14 +2160,14 @@ stack_double(int* is_alloca, char** arg_alloc_base,
 } while(0)
 
 #define STACK_MEM_START_GET_PREV_END_ADDR(k /* STK_MEM_START*/, reg, addr) do {\
-  if (k->u.mem.prev_end == INVALID_STACK_INDEX) {\
+  if (k->u.mem.prev_end.i == INVALID_STACK_INDEX) {\
     (addr) = 0;\
   }\
   else {\
     if (MEM_STATUS_AT((reg)->push_mem_end, k->zid))\
-      (addr) = STACK_AT(k->u.mem.prev_end)->u.mem.pstr;\
+      (addr) = STACK_AT(k->u.mem.prev_end.i)->u.mem.pstr;\
     else\
-      (addr) = (UChar* )k->u.mem.prev_end;\
+      (addr) = k->u.mem.prev_end.s;\
   }\
 } while (0)
 
@@ -2183,7 +2188,7 @@ stack_double(int* is_alloca, char** arg_alloc_base,
         if (endp == 0) {\
           (isnull) = 0; break;\
         }\
-        else if (STACK_AT(k->u.mem.prev_start)->u.mem.pstr != endp) {\
+        else if (STACK_AT(k->u.mem.prev_start.i)->u.mem.pstr != endp) {\
           (isnull) = 0; break;\
         }\
         else if (endp != s) {\
@@ -2219,7 +2224,7 @@ stack_double(int* is_alloca, char** arg_alloc_base,
                   if (endp == 0) {\
                     (isnull) = 0; break;\
                   }\
-                  else if (STACK_AT(k->u.mem.prev_start)->u.mem.pstr != endp) { \
+                  else if (STACK_AT(k->u.mem.prev_start.i)->u.mem.pstr != endp) { \
                     (isnull) = 0; break;\
                   }\
                   else if (endp != s) {\
@@ -2881,7 +2886,7 @@ match_at(regex_t* reg, const UChar* str, const UChar* end,
   char *alloc_base;
   StackType *stk_base, *stk, *stk_end;
   StackType *stkp; /* used as any purpose. */
-  StackIndex *mem_start_stk, *mem_end_stk;
+  StkPtrType *mem_start_stk, *mem_end_stk;
   UChar* keep;
 
 #ifdef USE_REPEAT_AND_EMPTY_CHECK_LOCAL_VAR
@@ -2950,7 +2955,7 @@ match_at(regex_t* reg, const UChar* str, const UChar* end,
   STACK_INIT(INIT_MATCH_STACK_SIZE);
   UPDATE_FOR_STACK_REALLOC;
   for (i = 1; i <= num_mem; i++) {
-    mem_start_stk[i] = mem_end_stk[i] = INVALID_STACK_INDEX;
+    mem_start_stk[i].i = mem_end_stk[i].i = INVALID_STACK_INDEX;
   }
 
 #ifdef ONIG_DEBUG_MATCH
@@ -2998,7 +3003,7 @@ match_at(regex_t* reg, const UChar* str, const UChar* end,
             rmt[0].rm_so = (regoff_t )(keep - str);
             rmt[0].rm_eo = (regoff_t )(s    - str);
             for (i = 1; i <= num_mem; i++) {
-              if (mem_end_stk[i] != INVALID_STACK_INDEX) {
+              if (mem_end_stk[i].i != INVALID_STACK_INDEX) {
                 rmt[i].rm_so = (regoff_t )(STACK_MEM_START(reg, i) - str);
                 rmt[i].rm_eo = (regoff_t )(STACK_MEM_END(reg, i)   - str);
               }
@@ -3012,7 +3017,7 @@ match_at(regex_t* reg, const UChar* str, const UChar* end,
             region->beg[0] = (int )(keep - str);
             region->end[0] = (int )(s    - str);
             for (i = 1; i <= num_mem; i++) {
-              if (mem_end_stk[i] != INVALID_STACK_INDEX) {
+              if (mem_end_stk[i].i != INVALID_STACK_INDEX) {
                 region->beg[i] = (int )(STACK_MEM_START(reg, i) - str);
                 region->end[i] = (int )(STACK_MEM_END(reg, i)   - str);
               }
@@ -3671,7 +3676,7 @@ match_at(regex_t* reg, const UChar* str, const UChar* end,
 
     CASE_OP(MEM_START)
       mem = p->memory_start.num;
-      mem_start_stk[mem] = (StackIndex )((void* )s);
+      mem_start_stk[mem].s = s;
       INC_OP;
       JUMP_OUT;
 
@@ -3683,7 +3688,7 @@ match_at(regex_t* reg, const UChar* str, const UChar* end,
 
     CASE_OP(MEM_END)
       mem = p->memory_end.num;
-      mem_end_stk[mem] = (StackIndex )((void* )s);
+      mem_end_stk[mem].s = s;
       INC_OP;
       JUMP_OUT;
 
@@ -3696,20 +3701,20 @@ match_at(regex_t* reg, const UChar* str, const UChar* end,
         STACK_GET_MEM_START(mem, stkp); /* should be before push mem-end. */
         si = GET_STACK_INDEX(stkp);
         STACK_PUSH_MEM_END(mem, s);
-        mem_start_stk[mem] = si;
+        mem_start_stk[mem].i = si;
         INC_OP;
         JUMP_OUT;
       }
 
     CASE_OP(MEM_END_REC)
       mem = p->memory_end.num;
-      mem_end_stk[mem] = (StackIndex )((void* )s);
+      mem_end_stk[mem].s = s;
       STACK_GET_MEM_START(mem, stkp);
 
       if (MEM_STATUS_AT(reg->push_mem_start, mem))
-        mem_start_stk[mem] = GET_STACK_INDEX(stkp);
+        mem_start_stk[mem].i = GET_STACK_INDEX(stkp);
       else
-        mem_start_stk[mem] = (StackIndex )((void* )stkp->u.mem.pstr);
+        mem_start_stk[mem].s = stkp->u.mem.pstr;
 
       STACK_PUSH_MEM_END_MARK(mem);
       INC_OP;
@@ -3730,8 +3735,8 @@ match_at(regex_t* reg, const UChar* str, const UChar* end,
       {
         UChar *pstart, *pend;
 
-        if (mem_end_stk[mem]   == INVALID_STACK_INDEX) goto fail;
-        if (mem_start_stk[mem] == INVALID_STACK_INDEX) goto fail;
+        if (mem_end_stk[mem].i   == INVALID_STACK_INDEX) goto fail;
+        if (mem_start_stk[mem].i == INVALID_STACK_INDEX) goto fail;
 
         pstart = STACK_MEM_START(reg, mem);
         pend   = STACK_MEM_END(reg, mem);
@@ -3749,8 +3754,8 @@ match_at(regex_t* reg, const UChar* str, const UChar* end,
       {
         UChar *pstart, *pend;
 
-        if (mem_end_stk[mem]   == INVALID_STACK_INDEX) goto fail;
-        if (mem_start_stk[mem] == INVALID_STACK_INDEX) goto fail;
+        if (mem_end_stk[mem].i   == INVALID_STACK_INDEX) goto fail;
+        if (mem_start_stk[mem].i == INVALID_STACK_INDEX) goto fail;
 
         pstart = STACK_MEM_START(reg, mem);
         pend   = STACK_MEM_END(reg, mem);
@@ -3772,8 +3777,8 @@ match_at(regex_t* reg, const UChar* str, const UChar* end,
         for (i = 0; i < tlen; i++) {
           mem = tlen == 1 ? p->backref_general.n1 : p->backref_general.ns[i];
 
-          if (mem_end_stk[mem]   == INVALID_STACK_INDEX) continue;
-          if (mem_start_stk[mem] == INVALID_STACK_INDEX) continue;
+          if (mem_end_stk[mem].i   == INVALID_STACK_INDEX) continue;
+          if (mem_start_stk[mem].i == INVALID_STACK_INDEX) continue;
 
           pstart = STACK_MEM_START(reg, mem);
           pend   = STACK_MEM_END(reg, mem);
@@ -3801,8 +3806,8 @@ match_at(regex_t* reg, const UChar* str, const UChar* end,
         for (i = 0; i < tlen; i++) {
           mem = tlen == 1 ? p->backref_general.n1 : p->backref_general.ns[i];
 
-          if (mem_end_stk[mem]   == INVALID_STACK_INDEX) continue;
-          if (mem_start_stk[mem] == INVALID_STACK_INDEX) continue;
+          if (mem_end_stk[mem].i   == INVALID_STACK_INDEX) continue;
+          if (mem_start_stk[mem].i == INVALID_STACK_INDEX) continue;
 
           pstart = STACK_MEM_START(reg, mem);
           pend   = STACK_MEM_END(reg, mem);
@@ -3854,8 +3859,8 @@ match_at(regex_t* reg, const UChar* str, const UChar* end,
 
         for (i = 0; i < tlen; i++) {
           mem = mems[i];
-          if (mem_end_stk[mem]   == INVALID_STACK_INDEX) continue;
-          if (mem_start_stk[mem] == INVALID_STACK_INDEX) continue;
+          if (mem_end_stk[mem].i   == INVALID_STACK_INDEX) continue;
+          if (mem_start_stk[mem].i == INVALID_STACK_INDEX) continue;
           break; /* success */
         }
         if (i == tlen) goto fail;
@@ -4401,7 +4406,7 @@ regset_search_body_position_lead(OnigRegSet* set,
 {
   int r, n, i;
   UChar *s;
-  UChar *low, *high, *low_prev;
+  UChar *low, *high;
   UChar* sch_range;
   regex_t* reg;
   OnigEncoding enc;
@@ -4425,7 +4430,7 @@ regset_search_body_position_lead(OnigRegSet* set,
         else
           sch_range = (UChar* )end;
 
-        if (forward_search(reg, str, end, s, sch_range, &low, &high, &low_prev)) {
+        if (forward_search(reg, str, end, s, sch_range, &low, &high)) {
           sr[i].state = SRS_LOW_HIGH;
           sr[i].low  = low;
           sr[i].high = high;
@@ -4434,8 +4439,7 @@ regset_search_body_position_lead(OnigRegSet* set,
       }
       else {
         sch_range = (UChar* )end;
-        if (forward_search(reg, str, end, s, sch_range,
-                           &low, &high, (UChar** )NULL)) {
+        if (forward_search(reg, str, end, s, sch_range, &low, &high)) {
           goto total_active;
         }
       }
@@ -4460,7 +4464,7 @@ regset_search_body_position_lead(OnigRegSet* set,
         if (s <  sr[i].low) continue;
         if (s >= sr[i].high) {
           if (forward_search(set->rs[i].reg, str, end, s, sr[i].sch_range,
-                             &low, &high, &low_prev) != 0) {
+                             &low, &high) != 0) {
             sr[i].low      = low;
             sr[i].high     = high;
             if (s < low) continue;
@@ -4503,10 +4507,9 @@ regset_search_body_position_lead(OnigRegSet* set,
           if (s <  sr[i].low) continue;
           if (s >= sr[i].high) {
             if (forward_search(set->rs[i].reg, str, end, s, sr[i].sch_range,
-                               &low, &high, &low_prev) != 0) {
+                               &low, &high) != 0) {
               sr[i].low      = low;
               sr[i].high     = high;
-              /* sr[i].low_prev = low_prev; */
               if (s < low) continue;
             }
             else {
@@ -4856,7 +4859,7 @@ slow_search_backward(OnigEncoding enc, UChar* target, UChar* target_end,
   else
     s = ONIGENC_LEFT_ADJUST_CHAR_HEAD(enc, adjust_text, s);
 
-  while (s >= text) {
+  while (PTR_GE(s, text)) {
     if (*s == *target) {
       p = s + 1;
       t = target + 1;
@@ -4945,6 +4948,21 @@ sunday_quick_search(regex_t* reg, const UChar* target, const UChar* target_end,
   tail = target_end - 1;
   s = text + (tail - target);
 
+#ifdef USE_STRICT_POINTER_ADDRESS
+  if (s < end) {
+    while (TRUE) {
+      p = s;
+      t = tail;
+      while (*p == *t) {
+        if (t == target) return (UChar* )p;
+        p--; t--;
+      }
+      if (text_end - s <= map_offset) break;
+      if (reg->map[*(s + map_offset)] >= end - s) break;
+      s += reg->map[*(s + map_offset)];
+    }
+  }
+#else
   while (s < end) {
     p = s;
     t = tail;
@@ -4952,9 +4970,10 @@ sunday_quick_search(regex_t* reg, const UChar* target, const UChar* target_end,
       if (t == target) return (UChar* )p;
       p--; t--;
     }
-    if (s + map_offset >= text_end) break;
+    if (text_end - s <= map_offset) break;
     s += reg->map[*(s + map_offset)];
   }
+#endif
 
   return (UChar* )NULL;
 }
@@ -4980,7 +4999,7 @@ map_search_backward(OnigEncoding enc, UChar map[],
 {
   const UChar *s = text_start;
 
-  while (s >= text) {
+  while (PTR_GE(s, text)) {
     if (map[*s]) return (UChar* )s;
 
     s = onigenc_get_prev_char_head(enc, adjust_text, s);
@@ -5049,7 +5068,7 @@ onig_match_with_param(regex_t* reg, const UChar* str, const UChar* end,
 
 static int
 forward_search(regex_t* reg, const UChar* str, const UChar* end, UChar* start,
-               UChar* range, UChar** low, UChar** high, UChar** low_prev)
+               UChar* range, UChar** low, UChar** high)
 {
   UChar *p, *pprev = (UChar* )NULL;
 
@@ -5133,33 +5152,18 @@ forward_search(regex_t* reg, const UChar* str, const UChar* end, UChar* start,
     }
 
     if (reg->dist_max == 0) {
-      *low = p;
-      if (low_prev) {
-        if (*low > start)
-          *low_prev = onigenc_get_prev_char_head(reg->enc, start, p);
-        else
-          *low_prev = onigenc_get_prev_char_head(reg->enc,
-                                                 (pprev ? pprev : str), p);
-      }
+      *low  = p;
       *high = p;
     }
     else {
       if (reg->dist_max != INFINITE_LEN) {
         if (p - str < reg->dist_max) {
           *low = (UChar* )str;
-          if (low_prev)
-            *low_prev = onigenc_get_prev_char_head(reg->enc, str, *low);
         }
         else {
           *low = p - reg->dist_max;
           if (*low > start) {
-            *low = onigenc_get_right_adjust_char_head_with_prev(reg->enc, start,
-                                                 *low, (const UChar** )low_prev);
-          }
-          else {
-            if (low_prev)
-              *low_prev = onigenc_get_prev_char_head(reg->enc,
-                                                     (pprev ? pprev : str), *low);
+            *low = onigenc_get_right_adjust_char_head(reg->enc, start, *low);
           }
         }
       }
@@ -5486,7 +5490,7 @@ search_in_range(regex_t* reg, const UChar* str, const UChar* end,
   s = (UChar* )start;
   if (range > start) {   /* forward search */
     if (reg->optimize != OPTIMIZE_NONE) {
-      UChar *sch_range, *low, *high, *low_prev;
+      UChar *sch_range, *low, *high;
 
       if (reg->dist_max != 0) {
         if (reg->dist_max == INFINITE_LEN)
@@ -5507,8 +5511,8 @@ search_in_range(regex_t* reg, const UChar* str, const UChar* end,
 
       if (reg->dist_max != INFINITE_LEN) {
         do {
-          if (! forward_search(reg, str, end, s, sch_range, &low, &high,
-                               &low_prev)) goto mismatch;
+          if (! forward_search(reg, str, end, s, sch_range, &low, &high))
+            goto mismatch;
           if (s < low) {
             s    = low;
           }
@@ -5520,8 +5524,8 @@ search_in_range(regex_t* reg, const UChar* str, const UChar* end,
         goto mismatch;
       }
       else { /* check only. */
-        if (! forward_search(reg, str, end, s, sch_range, &low, &high,
-                             (UChar** )NULL)) goto mismatch;
+        if (! forward_search(reg, str, end, s, sch_range, &low, &high))
+          goto mismatch;
 
         if ((reg->anchor & ANCR_ANYCHAR_INF) != 0 &&
             (reg->anchor & (ANCR_LOOK_BEHIND | ANCR_PREC_READ_NOT)) == 0) {
@@ -5588,11 +5592,11 @@ search_in_range(regex_t* reg, const UChar* str, const UChar* end,
           if (s > high)
             s = high;
 
-          while (s >= low) {
+          while (PTR_GE(s, low)) {
             MATCH_AND_RETURN_CHECK(orig_start);
             s = onigenc_get_prev_char_head(reg->enc, str, s);
           }
-        } while (s >= range);
+        } while (PTR_GE(s, range));
         goto mismatch;
       }
       else { /* check only. */
@@ -5606,7 +5610,7 @@ search_in_range(regex_t* reg, const UChar* str, const UChar* end,
     do {
       MATCH_AND_RETURN_CHECK(orig_start);
       s = onigenc_get_prev_char_head(reg->enc, str, s);
-    } while (s >= range);
+    } while (PTR_GE(s, range));
   }
 
  mismatch:
@@ -6176,8 +6180,8 @@ onig_get_capture_range_in_callout(OnigCalloutArgs* a, int mem_num, int* begin, i
   const UChar* str;
   StackType*   stk_base;
   int i;
-  StackIndex* mem_start_stk;
-  StackIndex* mem_end_stk;
+  StkPtrType* mem_start_stk;
+  StkPtrType* mem_end_stk;
 
   i = mem_num;
   reg = a->regex;
@@ -6187,7 +6191,7 @@ onig_get_capture_range_in_callout(OnigCalloutArgs* a, int mem_num, int* begin, i
   mem_end_stk   = a->mem_end_stk;
 
   if (i > 0) {
-    if (a->mem_end_stk[i] != INVALID_STACK_INDEX) {
+    if (a->mem_end_stk[i].i != INVALID_STACK_INDEX) {
       *begin = (int )(STACK_MEM_START(reg, i) - str);
       *end   = (int )(STACK_MEM_END(reg, i)   - str);
     }
