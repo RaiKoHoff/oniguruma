@@ -127,6 +127,11 @@
 #include <inttypes.h>
 #endif
 
+#if defined(_MSC_VER) && defined(HAVE_BASETSD_H)
+#include <basetsd.h>
+typedef SSIZE_T ssize_t;
+#endif
+
 #if defined(_WIN32) || defined(__BORLANDC__)
 #include <malloc.h>
 #endif
