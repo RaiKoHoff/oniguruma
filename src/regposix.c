@@ -265,22 +265,25 @@ onig_posix_reg_set_encoding(int mb_code)
   case REG_POSIX_ENCODING_ASCII:
     enc = ONIG_ENCODING_ASCII;
     break;
+#if 0
   case REG_POSIX_ENCODING_EUC_JP:
     enc = ONIG_ENCODING_EUC_JP;
     break;
   case REG_POSIX_ENCODING_SJIS:
     enc = ONIG_ENCODING_SJIS;
     break;
+#endif
   case REG_POSIX_ENCODING_UTF8:
     enc = ONIG_ENCODING_UTF8;
     break;
+#if 0
   case REG_POSIX_ENCODING_UTF16_BE:
     enc = ONIG_ENCODING_UTF16_BE;
     break;
   case REG_POSIX_ENCODING_UTF16_LE:
     enc = ONIG_ENCODING_UTF16_LE;
     break;
-
+#endif
   default:
     return ;
     break;

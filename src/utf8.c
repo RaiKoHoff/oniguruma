@@ -97,6 +97,36 @@ is_valid_mbc_string(const UChar* p, const UChar* end)
   return TRUE;
 }
 
+
+#if 0
+static int
+is_mbc_newline(const UChar * p, const UChar * end)
+{
+  if (p < end) {
+    if (*p == 0x0a) return 1;
+
+#ifdef USE_CRNL_AS_LINE_TERMINATOR
+    if (*p == 0x0d) return 1;
+#endif
+
+#ifdef USE_UNICODE_ALL_LINE_TERMINATORS
+    if (p + 1 < end) {
+      if (*(p + 1) == 0x85 && *p == 0xc2) /* U+0085 */
+        return 1;
+      if (p + 2 < end) {
+        if ((*(p + 2) == 0xa8 || *(p + 2) == 0xa9)
+          && *(p + 1) == 0x80 && *p == 0xe2)  /* U+2028, U+2029 */
+          return 1;
+      }
+    }
+#endif
+  }
+
+  return 0;
+}
+#endif
+
+
 static OnigCodePoint
 mbc_to_code(const UChar* p, const UChar* end)
 {
@@ -270,6 +300,7 @@ OnigEncodingType OnigEncodingUTF8 = {
   6,
 #endif
   1,           /* min enc length */
+  //is_mbc_newline,
   onigenc_is_mbc_newline_0x0a,
   mbc_to_code,
   code_to_mbclen,
@@ -288,3 +319,65 @@ OnigEncodingType OnigEncodingUTF8 = {
   ENC_FLAG_ASCII_COMPATIBLE|ENC_FLAG_UNICODE|ENC_FLAG_SKIP_OFFSET_1_OR_0,
   0, 0
 };
+
+
+OnigEncodingType OnigEncodingUTF8_CR = {
+  mbc_enc_len,
+  "UTF-8",     /* name */
+#ifdef USE_RFC3629_RANGE
+  4,           /* max enc length */
+#else
+  6,
+#endif
+  1,           /* min enc length */
+  //is_mbc_newline,
+  onigenc_is_mbc_newline_0x0d,
+  mbc_to_code,
+  code_to_mbclen,
+  code_to_mbc,
+  mbc_case_fold,
+  onigenc_unicode_apply_all_case_fold,
+  get_case_fold_codes_by_str,
+  onigenc_unicode_property_name_to_ctype,
+  onigenc_unicode_is_code_ctype,
+  get_ctype_code_range,
+  left_adjust_char_head,
+  onigenc_always_true_is_allowed_reverse_match,
+  NULL, /* init */
+  NULL, /* is_initialized */
+  is_valid_mbc_string,
+  ENC_FLAG_ASCII_COMPATIBLE|ENC_FLAG_UNICODE|ENC_FLAG_SKIP_OFFSET_1_OR_0,
+  0, 0
+};
+
+
+OnigEncodingType OnigEncodingUTF8_CRLF = {
+  mbc_enc_len,
+  "UTF-8",     /* name */
+#ifdef USE_RFC3629_RANGE
+  4,           /* max enc length */
+#else
+  6,
+#endif
+  1,           /* min enc length */
+  //is_mbc_newline,
+  onigenc_is_mbc_newline_0x0d_0x0a,
+  mbc_to_code,
+  code_to_mbclen,
+  code_to_mbc,
+  mbc_case_fold,
+  onigenc_unicode_apply_all_case_fold,
+  get_case_fold_codes_by_str,
+  onigenc_unicode_property_name_to_ctype,
+  onigenc_unicode_is_code_ctype,
+  get_ctype_code_range,
+  left_adjust_char_head,
+  onigenc_always_true_is_allowed_reverse_match,
+  NULL, /* init */
+  NULL, /* is_initialized */
+  is_valid_mbc_string,
+  ENC_FLAG_ASCII_COMPATIBLE|ENC_FLAG_UNICODE|ENC_FLAG_SKIP_OFFSET_1_OR_0,
+  0, 0
+};
+
+
