@@ -2,7 +2,6 @@
 #define REGINT_H
 /**********************************************************************
   regint.h -  Oniguruma (regular expression library)
-  encoding: UTF-8
 **********************************************************************/
 /*-
  * Copyright (c) 2002-2020  K.Kosako
