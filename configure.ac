@@ -79,4 +79,23 @@ AC_FUNC_ALLOCA
 
 AC_CONFIG_FILES([Makefile src/Makefile test/Makefile sample/Makefile onig-config])
 AC_CONFIG_COMMANDS([default],[chmod +x onig-config],[])
+
+# for Issue #220
+LIBONIG_DEF_FILE=
+FIX_TO_LDFLAGS=
+case $host_os in
+  cygwin* | mingw* )
+    if test X"$enable_shared" = Xyes; then
+      LIBONIG_DEF_FILE=libonig.def
+      FIX_TO_LDFLAGS="-no-undefined"
+    fi
+    ;;
+esac
+
+EXTRA_LIBONIG_LDFLAGS="$EXTRA_LIBONIG_LDFLAGS $FIX_TO_LDFLAGS"
+AC_SUBST(EXTRA_LIBONIG_LDFLAGS)
+
+AM_CONDITIONAL(USE_LIBONIG_DEF_FILE, test -n "${LIBONIG_DEF_FILE}")
+AC_SUBST(LIBONIG_DEF_FILE)
+
 AC_OUTPUT
