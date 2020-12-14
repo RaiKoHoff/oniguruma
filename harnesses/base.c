@@ -12,21 +12,22 @@
 #include <time.h>
 #include "oniguruma.h"
 
-#define PARSE_DEPTH_LIMIT           8
-#define CALL_MAX_NEST_LEVEL         8
-#define SUBEXP_CALL_LIMIT         500
-#define BASE_RETRY_LIMIT        20000
-#define BASE_LENGTH              2048
-#define MATCH_STACK_LIMIT    10000000
-#define MAX_REM_SIZE          1048576
-#define MAX_SLOW_REM_SIZE        1024
-#define SLOW_RETRY_LIMIT         2000
+#define PARSE_DEPTH_LIMIT               8
+#define MAX_SUBEXP_CALL_NEST_LEVEL      8
+#define SUBEXP_CALL_LIMIT            1000
+#define BASE_RETRY_LIMIT            20000
+#define BASE_LENGTH                  2048
+#define MATCH_STACK_LIMIT        10000000
+#define MAX_REM_SIZE              1048576
+#define MAX_SLOW_REM_SIZE            1024
+#define SLOW_RETRY_LIMIT             2000
+#define SLOW_SUBEXP_CALL_LIMIT        100
 
-//#define EXEC_PRINT_INTERVAL    500000
-//#define DUMP_DATA_INTERVAL     100000
-//#define STAT_PATH              "fuzzer.stat_log"
+//#define EXEC_PRINT_INTERVAL      500000
+//#define DUMP_DATA_INTERVAL       100000
+//#define STAT_PATH                "fuzzer.stat_log"
 
-#define OPTIONS_AT_COMPILE   (ONIG_OPTION_IGNORECASE | ONIG_OPTION_EXTEND | ONIG_OPTION_MULTILINE | ONIG_OPTION_SINGLELINE | ONIG_OPTION_FIND_LONGEST | ONIG_OPTION_FIND_NOT_EMPTY | ONIG_OPTION_NEGATE_SINGLELINE | ONIG_OPTION_DONT_CAPTURE_GROUP | ONIG_OPTION_CAPTURE_GROUP | ONIG_OPTION_WORD_IS_ASCII | ONIG_OPTION_DIGIT_IS_ASCII | ONIG_OPTION_SPACE_IS_ASCII | ONIG_OPTION_POSIX_IS_ASCII | ONIG_OPTION_TEXT_SEGMENT_EXTENDED_GRAPHEME_CLUSTER | ONIG_OPTION_TEXT_SEGMENT_WORD )
+#define OPTIONS_AT_COMPILE   (ONIG_OPTION_IGNORECASE | ONIG_OPTION_EXTEND | ONIG_OPTION_MULTILINE | ONIG_OPTION_SINGLELINE | ONIG_OPTION_FIND_LONGEST | ONIG_OPTION_FIND_NOT_EMPTY | ONIG_OPTION_NEGATE_SINGLELINE | ONIG_OPTION_DONT_CAPTURE_GROUP | ONIG_OPTION_CAPTURE_GROUP | ONIG_OPTION_WORD_IS_ASCII | ONIG_OPTION_DIGIT_IS_ASCII | ONIG_OPTION_SPACE_IS_ASCII | ONIG_OPTION_POSIX_IS_ASCII | ONIG_OPTION_TEXT_SEGMENT_EXTENDED_GRAPHEME_CLUSTER | ONIG_OPTION_TEXT_SEGMENT_WORD | ONIG_OPTION_IGNORECASE_IS_ASCII)
 
 #define OPTIONS_AT_RUNTIME   (ONIG_OPTION_NOTBOL | ONIG_OPTION_NOTEOL | ONIG_OPTION_CHECK_VALIDITY_OF_STRING | ONIG_OPTION_NOT_BEGIN_STRING | ONIG_OPTION_NOT_END_STRING | ONIG_OPTION_NOT_BEGIN_POSITION)
 
@@ -37,6 +38,18 @@
 } while (0)
 
 typedef unsigned char uint8_t;
+
+
+//#define TEST_PATTERN
+
+#ifdef TEST_PATTERN
+
+#if 1
+unsigned char TestPattern[] = {
+};
+#endif
+
+#endif /* TEST_PATTERN */
 
 #ifdef DUMP_INPUT
 static void
@@ -145,7 +158,10 @@ search(regex_t* reg, unsigned char* str, unsigned char* end, OnigOptionType opti
 
   onig_set_retry_limit_in_search(retry_limit);
   onig_set_match_stack_limit_size(MATCH_STACK_LIMIT);
-  onig_set_subexp_call_limit_in_search(SUBEXP_CALL_LIMIT);
+  if (sl >= 2)
+    onig_set_subexp_call_limit_in_search(SLOW_SUBEXP_CALL_LIMIT);
+  else
+    onig_set_subexp_call_limit_in_search(SUBEXP_CALL_LIMIT);
 
   if (backward != 0) {
     start = end;
@@ -221,7 +237,7 @@ exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
 #ifdef PARSE_DEPTH_LIMIT
   onig_set_parse_depth_limit(PARSE_DEPTH_LIMIT);
 #endif
-  onig_set_subexp_call_max_nest_level(CALL_MAX_NEST_LEVEL);
+  onig_set_subexp_call_max_nest_level(MAX_SUBEXP_CALL_NEST_LEVEL);
 
   r = onig_new(&reg, pattern, pattern_end,
                (options & OPTIONS_AT_COMPILE), enc, syntax, &einfo);
@@ -270,9 +286,16 @@ alloc_exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
   unsigned char *pattern_end;
   unsigned char *str_null_end;
 
+#ifdef TEST_PATTERN
+  pattern = (unsigned char *)malloc(sizeof(TestPattern));
+  memcpy(pattern, TestPattern, sizeof(TestPattern));
+  pattern_end = pattern + sizeof(TestPattern);
+#else
   pattern = (unsigned char *)malloc(pattern_size != 0 ? pattern_size : 1);
   memcpy(pattern, data, pattern_size);
   pattern_end = pattern + pattern_size;
+#endif
+
   data += pattern_size;
   rem_size -= pattern_size;
 
@@ -303,9 +326,9 @@ alloc_exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
 }
 
 #ifdef SYNTAX_TEST
-#define NUM_CONTROL_BYTES      7
+#define NUM_CONTROL_BYTES      8
 #else
-#define NUM_CONTROL_BYTES      6
+#define NUM_CONTROL_BYTES      7
 #endif
 
 int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
@@ -438,11 +461,12 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
   syntax = ONIG_SYNTAX_DEFAULT;
 #endif
 
-  if ((data[2] & 0xc0) == 0)
-    options = data[0] | (data[1] << 8) | (data[2] << 16);
+  if ((data[3] & 0xc0) == 0)
+    options = data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
   else
     options = data[0] & ONIG_OPTION_IGNORECASE;
 
+  data++; rem_size--;
   data++; rem_size--;
   data++; rem_size--;
   data++; rem_size--;
