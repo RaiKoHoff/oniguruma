@@ -1,6 +1,6 @@
 /*
  * base.c  contributed by Mark Griffin
- * Copyright (c) 2019-2020  K.Kosako
+ * Copyright (c) 2019-2021  K.Kosako
  */
 #include <stdio.h>
 #include <unistd.h>
@@ -20,14 +20,21 @@
 #define MATCH_STACK_LIMIT        10000000
 #define MAX_REM_SIZE              1048576
 #define MAX_SLOW_REM_SIZE            1024
+#define MAX_SLOW_REM_SIZE2            100
 #define SLOW_RETRY_LIMIT             2000
 #define SLOW_SUBEXP_CALL_LIMIT        100
+#define MAX_SLOW_BACKWARD_REM_SIZE    200
 
 //#define EXEC_PRINT_INTERVAL      500000
 //#define DUMP_DATA_INTERVAL       100000
 //#define STAT_PATH                "fuzzer.stat_log"
+//#define PREV_CONTROL
 
+#ifdef PREV_CONTROL
+#define OPTIONS_AT_COMPILE   (ONIG_OPTION_IGNORECASE | ONIG_OPTION_EXTEND | ONIG_OPTION_MULTILINE | ONIG_OPTION_SINGLELINE | ONIG_OPTION_FIND_LONGEST | ONIG_OPTION_FIND_NOT_EMPTY | ONIG_OPTION_NEGATE_SINGLELINE | ONIG_OPTION_DONT_CAPTURE_GROUP | ONIG_OPTION_CAPTURE_GROUP | ONIG_OPTION_WORD_IS_ASCII | ONIG_OPTION_DIGIT_IS_ASCII | ONIG_OPTION_SPACE_IS_ASCII | ONIG_OPTION_POSIX_IS_ASCII | ONIG_OPTION_TEXT_SEGMENT_EXTENDED_GRAPHEME_CLUSTER | ONIG_OPTION_TEXT_SEGMENT_WORD)
+#else
 #define OPTIONS_AT_COMPILE   (ONIG_OPTION_IGNORECASE | ONIG_OPTION_EXTEND | ONIG_OPTION_MULTILINE | ONIG_OPTION_SINGLELINE | ONIG_OPTION_FIND_LONGEST | ONIG_OPTION_FIND_NOT_EMPTY | ONIG_OPTION_NEGATE_SINGLELINE | ONIG_OPTION_DONT_CAPTURE_GROUP | ONIG_OPTION_CAPTURE_GROUP | ONIG_OPTION_WORD_IS_ASCII | ONIG_OPTION_DIGIT_IS_ASCII | ONIG_OPTION_SPACE_IS_ASCII | ONIG_OPTION_POSIX_IS_ASCII | ONIG_OPTION_TEXT_SEGMENT_EXTENDED_GRAPHEME_CLUSTER | ONIG_OPTION_TEXT_SEGMENT_WORD | ONIG_OPTION_IGNORECASE_IS_ASCII)
+#endif
 
 #define OPTIONS_AT_RUNTIME   (ONIG_OPTION_NOTBOL | ONIG_OPTION_NOTEOL | ONIG_OPTION_CHECK_VALIDITY_OF_STRING | ONIG_OPTION_NOT_BEGIN_STRING | ONIG_OPTION_NOT_END_STRING | ONIG_OPTION_NOT_BEGIN_POSITION)
 
@@ -50,6 +57,22 @@ unsigned char TestPattern[] = {
 #endif
 
 #endif /* TEST_PATTERN */
+
+#ifdef STANDALONE
+static void
+to_binary(unsigned int v, char s[/* 33 */])
+{
+  unsigned int mask;
+  int i;
+
+  mask = 1 << (sizeof(v) * 8 - 1);
+  i = 0;
+  do {
+    s[i++] = (mask & v ? '1' : '0');
+  } while (mask >>= 1);
+  s[i] = 0;
+}
+#endif
 
 #ifdef DUMP_INPUT
 static void
@@ -117,6 +140,7 @@ dump_data(FILE* fp, unsigned char* data, int len)
 
 #else
 
+#ifdef EXEC_PRINT_INTERVAL
 static void
 output_current_time(FILE* fp)
 {
@@ -128,8 +152,15 @@ output_current_time(FILE* fp)
 
   fprintf(fp, "%s", d);
 }
+#endif
 
 #endif
+
+static int
+progress_callout_func(OnigCalloutArgs* args, void* user_data)
+{
+  return ONIG_CALLOUT_SUCCESS;
+}
 
 static int
 search(regex_t* reg, unsigned char* str, unsigned char* end, OnigOptionType options, int backward, int sl)
@@ -234,6 +265,7 @@ exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
   EXEC_COUNT_INTERVAL++;
 
   onig_initialize(&enc, 1);
+  (void)onig_set_progress_callout(progress_callout_func);
 #ifdef PARSE_DEPTH_LIMIT
   onig_set_parse_depth_limit(PARSE_DEPTH_LIMIT);
 #endif
@@ -302,9 +334,22 @@ alloc_exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
   if (rem_size > MAX_REM_SIZE) rem_size = MAX_REM_SIZE;
 
   sl = onig_detect_can_be_slow_pattern(pattern, pattern_end, options, enc, syntax);
+#ifdef STANDALONE
+  fprintf(stdout, "sl: %d\n", sl);
+#endif
   if (sl > 0) {
-    if (rem_size > MAX_SLOW_REM_SIZE)
-      rem_size = MAX_SLOW_REM_SIZE;
+    if (sl >= 100) {
+      if (rem_size > MAX_SLOW_REM_SIZE2)
+        rem_size = MAX_SLOW_REM_SIZE2;
+    }
+    else {
+      if (rem_size > MAX_SLOW_REM_SIZE)
+        rem_size = MAX_SLOW_REM_SIZE;
+    }
+  }
+  if (backward != 0 && enc == ONIG_ENCODING_GB18030) {
+    if (rem_size > MAX_SLOW_BACKWARD_REM_SIZE)
+      rem_size = MAX_SLOW_BACKWARD_REM_SIZE;
   }
 
   ADJUST_LEN(enc, rem_size);
@@ -325,10 +370,18 @@ alloc_exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,
   return r;
 }
 
+#ifdef PREV_CONTROL
+#ifdef SYNTAX_TEST
+#define NUM_CONTROL_BYTES      7
+#else
+#define NUM_CONTROL_BYTES      6
+#endif
+#else
 #ifdef SYNTAX_TEST
 #define NUM_CONTROL_BYTES      8
 #else
 #define NUM_CONTROL_BYTES      7
+#endif
 #endif
 
 int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
@@ -417,7 +470,9 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
   OnigSyntaxType* syntax;
 
 #ifndef STANDALONE
+#ifdef EXEC_PRINT_INTERVAL
   static FILE* STAT_FP;
+#endif
 #endif
 
   INPUT_COUNT++;
@@ -461,15 +516,22 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
   syntax = ONIG_SYNTAX_DEFAULT;
 #endif
 
+#ifdef PREV_CONTROL
+  if ((data[2] & 0xc0) == 0)
+    options = data[0] | (data[1] << 8) | (data[2] << 16);
+#else
   if ((data[3] & 0xc0) == 0)
     options = data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
+#endif
   else
     options = data[0] & ONIG_OPTION_IGNORECASE;
 
   data++; rem_size--;
   data++; rem_size--;
   data++; rem_size--;
+#ifndef PREV_CONTROL
   data++; rem_size--;
+#endif
 
   pattern_size_choice = data[0];
   data++; rem_size--;
@@ -489,18 +551,22 @@ int LLVMFuzzerTestOneInput(const uint8_t * Data, size_t Size)
   }
 
 #ifdef STANDALONE
-  dump_data(stdout, data, pattern_size);
+  {
+    char soptions[33];
+
+    dump_data(stdout, data, pattern_size);
+    to_binary(options, soptions);
 #ifdef SYNTAX_TEST
-  fprintf(stdout,
-          "enc: %s, syntax: %s, options: %u, pattern_size: %d, back:%d\n",
-          ONIGENC_NAME(enc),
-          syntax_names[syntax_choice % num_syntaxes],
-          options,
-          pattern_size, backward);
+    fprintf(stdout,
+	    "enc: %s, syntax: %s, pattern_size: %d, back:%d\noptions: %s\n",
+	    ONIGENC_NAME(enc),
+	    syntax_names[syntax_choice % num_syntaxes],
+	    pattern_size, backward, soptions);
 #else
-  fprintf(stdout, "enc: %s, options: %u, pattern_size: %d, back:%d\n",
-          ONIGENC_NAME(enc), options, pattern_size, backward);
+    fprintf(stdout, "enc: %s, pattern_size: %d, back:%d\noptions: %s\n",
+	    ONIGENC_NAME(enc), pattern_size, backward, soptions);
 #endif
+  }
 #endif
 
 #ifdef DUMP_INPUT
