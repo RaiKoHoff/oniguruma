@@ -1,8 +1,7 @@
 /*
  * test_utf8.c
- * Copyright (c) 2019-2020  K.Kosako
+ * Copyright (c) 2019-2021  K.Kosako
  */
-#include "config.h"
 #ifdef ONIG_ESCAPE_UCHAR_COLLISION
 #undef ONIG_ESCAPE_UCHAR_COLLISION
 #endif
@@ -1462,9 +1461,12 @@ extern int main(int argc, char* argv[])
 
   x2("((?(a)\\g<1>|b))", "aab", 0, 3);
   x2("((?(a)\\g<1>))", "aab", 0, 2);
+  x2("((?(a)\\g<1>))", "", 0, 0);
   x2("(b(?(a)|\\g<1>))", "bba", 0, 3);
   e("(()(?(2)\\g<1>))", "", ONIGERR_NEVER_ENDING_RECURSION);
   x2("(?(a)(?:b|c))", "ac", 0, 2);
+  x2("(?(a)(?:b|c))", "", 0, 0);
+  x2("(?(a)b)", "", 0, 0);
   n("^(?(a)b|c)", "ac");
   x2("(?i)a|b", "B", 0, 1);
   n("((?i)a|b.)|c", "C");
@@ -1606,6 +1608,7 @@ extern int main(int argc, char* argv[])
   n("(?x)\n  (?<!\\+\\+|--)(?<=[({\\[,?=>:*]|&&|\\|\\||\\?|\\*\\/|^await|[^\\._$[:alnum:]]await|^return|[^\\._$[:alnum:]]return|^default|[^\\._$[:alnum:]]default|^yield|[^\\._$[:alnum:]]yield|^)\\s*\n  (?!<\\s*[_$[:alpha:]][_$[:alnum:]]*((\\s+extends\\s+[^=>])|,)) # look ahead is not type parameter of arrow\n  (?=(<)\\s*(?:([_$[:alpha:]][-_$[:alnum:].]*)(?<!\\.|-)(:))?((?:[a-z][a-z0-9]*|([_$[:alpha:]][-_$[:alnum:].]*))(?<!\\.|-))(?=((<\\s*)|(\\s+))(?!\\?)|\\/?>))", "    while (i < len && f(array[i]))"); /* Issue #192 */
 
   x2("aaaaaaaaaaaaaaaaaaaaaaaあb", "aaaaaaaaaaaaaaaaaaaaaaaあb", 0, 27); /* Issue #221 */
+  n("d{65538}+{61533} ", "d{65538}+{61533} ");
 
   e("x{55380}{77590}", "", ONIGERR_TOO_BIG_NUMBER_FOR_REPEAT_RANGE);
   e("(xyz){40000}{99999}(?<name>vv)", "", ONIGERR_TOO_BIG_NUMBER_FOR_REPEAT_RANGE);

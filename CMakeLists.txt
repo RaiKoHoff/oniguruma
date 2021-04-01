@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project(oniguruma
-  VERSION 6.9.6
+  VERSION 6.9.7
   LANGUAGES C)
 
 set(PACKAGE onig)
@@ -100,8 +100,8 @@ if(MSVC)
 	  $<$<CONFIG:RelWithDebgInfo>:/MTd>
 	  )
   endif()
-  if(MSVC_VERSION LESS_EQUAL "1600")
-    # <= VS2010
+  if(MSVC_VERSION LESS_EQUAL "1800")
+    # <= VS2013
     target_compile_definitions(onig PRIVATE
       -Dinline=__inline
       )
