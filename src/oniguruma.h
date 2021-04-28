@@ -80,8 +80,6 @@ extern "C" {
 #define UChar OnigUChar
 #endif
 
-typedef int            OnigPosition;  // extent
-
 typedef unsigned int   OnigCodePoint;
 typedef unsigned char  OnigUChar;
 typedef unsigned int   OnigCtype;
