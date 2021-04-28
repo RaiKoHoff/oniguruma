@@ -26,7 +26,7 @@ static void xx(char* pattern, char* str, int from, int to, int mem, int not)
   if (nall++ % TIS_TEST_CHOOSE_MAX != TIS_TEST_CHOOSE_CURRENT) return;
 #endif
 
-  int r;
+  OnigPos r;
   regex_t* reg;
   OnigErrorInfo einfo;
 
@@ -72,7 +72,7 @@ static void xx(char* pattern, char* str, int from, int to, int mem, int not)
         nsucc++;
       }
       else {
-        fprintf(stdout, "FAIL: /%s/ '%s' %d-%d : %d-%d\n", pattern, str,
+        fprintf(stdout, "FAIL: /%s/ '%s' %d-%d : %ld-%ld\n", pattern, str,
                 from, to, region->beg[mem], region->end[mem]);
         nfail++;
       }

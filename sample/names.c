@@ -19,14 +19,14 @@ name_callback(const UChar* name, const UChar* name_end,
     ref = onig_name_to_backref_number(reg, name, name_end, region);
     s = (ref == gn ? "*" : "");
     fprintf(stderr, "%s (%d): ", name, gn);
-    fprintf(stderr, "(%d-%d) %s\n", region->beg[gn], region->end[gn], s);
+    fprintf(stderr, "(%ld-%ld) %s\n", region->beg[gn], region->end[gn], s);
   }
   return 0;  /* 0: continue */
 }
 
 extern int main(int argc, char* argv[])
 {
-  int r;
+  OnigPos r;
   unsigned char *start, *range, *end;
   regex_t* reg;
   OnigErrorInfo einfo;
@@ -57,7 +57,7 @@ extern int main(int argc, char* argv[])
   range = end;
   r = onig_search(reg, str, end, start, range, region, ONIG_OPTION_NONE);
   if (r >= 0) {
-    fprintf(stderr, "match at %d\n\n", r);
+    fprintf(stderr, "match at %ld\n\n", r);
     r = onig_foreach_name(reg, name_callback, (void* )region);
   }
   else if (r == ONIG_MISMATCH) {

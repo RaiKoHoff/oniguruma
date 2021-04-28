@@ -9,7 +9,7 @@ extern int main(int argc, char* argv[])
 {
   int r;
   int i, n;
-  int match_pos;
+  OnigPos match_pos;
   unsigned char *start, *range, *end;
   OnigRegSet* set;
   OnigRegSetLead lead;
@@ -71,11 +71,11 @@ extern int main(int argc, char* argv[])
     OnigRegion *region;
 
     fprintf(stderr, "match regex index: %d\n", r);
-    fprintf(stderr, "match position: %d\n", match_pos);
+    fprintf(stderr, "match position: %ld\n", match_pos);
 
     region = onig_regset_get_region(set, r);
     for (i = 0; i < region->num_regs; i++) {
-      fprintf(stderr, "%d: (%d-%d)\n", i, region->beg[i], region->end[i]);
+      fprintf(stderr, "%d: (%ld-%ld)\n", i, region->beg[i], region->end[i]);
     }
   }
   else if (r == ONIG_MISMATCH) {
