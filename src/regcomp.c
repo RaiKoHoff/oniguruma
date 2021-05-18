@@ -7218,7 +7218,7 @@ print_optimize_info(FILE* f, regex_t* reg)
               ONIGENC_IS_CODE_PRINT(reg->enc, (OnigCodePoint )i))
             fputc(i, f);
           else
-            fprintf(f, "%d", i);
+            fprintf(f, "0x%02x", i);
         }
       }
       fprintf(f, "]\n");
@@ -8165,9 +8165,22 @@ onig_detect_can_be_slow_pattern(const UChar* pattern,
           + count.backref + count.backref_with_level + count.call
           + count.anychar_reluctant_many;
     if (count.heavy_element != 0)
-      n += count.heavy_element * 10;
+      n += count.heavy_element << 8;
 
     r = n;
+
+#ifdef ONIG_DEBUG_PARSE
+    fprintf(DBGFP, "-- detect can be slow --\n");
+    fprintf(DBGFP, "  prec_read:          %d\n", count.prec_read);
+    fprintf(DBGFP, "  look_behind:        %d\n", count.look_behind);
+    fprintf(DBGFP, "  backref:            %d\n", count.backref);
+    fprintf(DBGFP, "  backref_with_level: %d\n", count.backref_with_level);
+    fprintf(DBGFP, "  call:               %d\n", count.call);
+    fprintf(DBGFP, "  any_reluctant_many: %d\n", count.anychar_reluctant_many);
+    fprintf(DBGFP, "  heavy_element:      %d\n", count.heavy_element);
+    fprintf(DBGFP, "  r:                  %d\n", r);
+    fprintf(DBGFP, "\n");
+#endif
   }
 
   if (IS_NOT_NULL(scan_env.mem_env_dynamic))
