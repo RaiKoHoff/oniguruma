@@ -4430,7 +4430,7 @@ node_new_general_newline(Node** node, ParseEnv* env)
   Node* x;
   CClassNode* cc;
 
-  dlen = ONIGENC_CODE_TO_MBC(env->enc, 0x0d, buf);
+  dlen = ONIGENC_CODE_TO_MBC(env->enc, CARRIAGE_RET, buf);
   if (dlen < 0) return dlen;
   alen = ONIGENC_CODE_TO_MBC(env->enc, NEWLINE_CODE, buf + dlen);
   if (alen < 0) return alen;
@@ -4443,7 +4443,7 @@ node_new_general_newline(Node** node, ParseEnv* env)
 
   cc = CCLASS_(ncc);
   if (dlen == 1) {
-    bitset_set_range(cc->bs, NEWLINE_CODE, 0x0d);
+    bitset_set_range(cc->bs, NEWLINE_CODE, CARRIAGE_RET);
   }
   else {
     r = add_code_range(&(cc->mbuf), env, NEWLINE_CODE, 0x0d);
@@ -5114,10 +5114,10 @@ is_posix_bracket_start(UChar* from, UChar* to, OnigEncoding enc)
   p = from;
   while (p < to) {
     x = ONIGENC_MBC_TO_CODE(enc, p, to);
-    p += enclen(enc, p);
+      p += enclen(enc, p);
     if (x == ':') {
       if (p < to) {
-        x = ONIGENC_MBC_TO_CODE(enc, p, to);
+      x = ONIGENC_MBC_TO_CODE(enc, p, to);
         if (x == ']') {
           if (n == 0) return FALSE;
           else        return TRUE;
@@ -5125,13 +5125,13 @@ is_posix_bracket_start(UChar* from, UChar* to, OnigEncoding enc)
       }
 
       return FALSE;
-    }
+      }
     else if (x == '^' && n == 0) {
       ;
     }
     else if (! ONIGENC_IS_CODE_ALPHA(enc, x)) {
       break;
-    }
+  }
 
     n += 1;
   }
@@ -6602,8 +6602,8 @@ prs_posix_bracket(CClassNode* cc, UChar** src, UChar* end, ParseEnv* env)
     }
   }
 
-  return ONIGERR_INVALID_POSIX_BRACKET_TYPE;
-}
+        return ONIGERR_INVALID_POSIX_BRACKET_TYPE;
+    }
 
 static int
 fetch_char_property_to_ctype(UChar** src, UChar* end, ParseEnv* env)
