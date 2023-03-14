@@ -4656,8 +4656,8 @@ regset_search_body_position_lead(OnigRegSet* set,
 
 static inline int
 regset_search_body_regex_lead(OnigRegSet* set,
-            const UChar* str, const UChar* end,
-            const UChar* start, const UChar* orig_range, OnigRegSetLead lead,
+              const UChar* str, const UChar* end,
+              const UChar* start, const UChar* orig_range, OnigRegSetLead lead,
               OnigOptionType option, OnigMatchParam* mps[], int* rmatch_pos)
 {
   int r;
@@ -4828,9 +4828,9 @@ onig_regset_search_with_param(OnigRegSet* set,
             goto match;
           }
           else goto finish; /* error */
-          }
         }
       }
+    }
 
     goto mismatch;
   }
@@ -4890,7 +4890,7 @@ onig_regset_search_with_param(OnigRegSet* set,
 
 extern int
 onig_regset_search(OnigRegSet* set, const UChar* str, const UChar* end,
-             const UChar* start, const UChar* range,
+                   const UChar* start, const UChar* range,
                    OnigRegSetLead lead, OnigOptionType option, int* rmatch_pos)
 {
   int r;
