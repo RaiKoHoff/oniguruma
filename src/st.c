@@ -455,6 +455,8 @@ st_cleanup_safe(st_table* table, st_data_t never)
   table->num_entries = num_entries;
 }
 
+#pragma warning(push)
+#pragma warning(disable : 4028)
 extern int
 st_foreach(st_table* table, int (*func)(st_data_t, st_data_t, st_data_t), st_data_t arg)
 {
@@ -501,6 +503,7 @@ st_foreach(st_table* table, int (*func)(st_data_t, st_data_t, st_data_t), st_dat
   }
   return 0;
 }
+#pragma warning(pop)
 
 static int
 str_cmp(st_data_t a1, st_data_t a2)
