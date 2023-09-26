@@ -5502,8 +5502,6 @@ fetch_token(PToken* tok, UChar** src, UChar* end, ParseEnv* env)
   UChar* p;
   PFETCH_READY;
 
-  PFETCH_READY;
-
   enc = env->enc;
   syn = env->syntax;
   p = *src;
