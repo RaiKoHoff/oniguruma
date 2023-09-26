@@ -2,7 +2,7 @@
   regposix.c - Oniguruma (regular expression library)
 **********************************************************************/
 /*-
- * Copyright (c) 2002-2021  K.Kosako
+ * Copyright (c) 2002-2022  K.Kosako
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -82,7 +82,7 @@ onig2posix_error_code(OnigPos code)
     { ONIGERR_STACK_BUG,                                  REG_EONIG_INTERNAL },
     { ONIGERR_UNDEFINED_BYTECODE,                         REG_EONIG_INTERNAL },
     { ONIGERR_UNEXPECTED_BYTECODE,                        REG_EONIG_INTERNAL },
-    { ONIGERR_DEFAULT_ENCODING_IS_NOT_SETTED,             REG_EONIG_BADARG },
+    { ONIGERR_DEFAULT_ENCODING_IS_NOT_SET,                REG_EONIG_BADARG },
     { ONIGERR_SPECIFIED_ENCODING_CANT_CONVERT_TO_WIDE_CHAR, REG_EONIG_BADARG },
     { ONIGERR_FAIL_TO_INITIALIZE,                         REG_EONIG_INTERNAL },
     { ONIGERR_INVALID_ARGUMENT,                           REG_EONIG_BADARG },
@@ -105,6 +105,7 @@ onig2posix_error_code(OnigPos code)
     { ONIGERR_END_PATTERN_WITH_UNMATCHED_PARENTHESIS,     REG_EPAREN  },
     { ONIGERR_END_PATTERN_IN_GROUP,                       REG_BADPAT  },
     { ONIGERR_UNDEFINED_GROUP_OPTION,                     REG_BADPAT  },
+    { ONIGERR_INVALID_GROUP_OPTION,                       REG_BADPAT  },
     { ONIGERR_INVALID_POSIX_BRACKET_TYPE,                 REG_BADPAT  },
     { ONIGERR_INVALID_LOOK_BEHIND_PATTERN,                REG_BADPAT  },
     { ONIGERR_INVALID_REPEAT_RANGE_PATTERN,               REG_BADPAT  },
@@ -270,22 +271,25 @@ onig_posix_reg_set_encoding(int mb_code)
   case REG_POSIX_ENCODING_ASCII:
     enc = ONIG_ENCODING_ASCII;
     break;
+#if 0
   case REG_POSIX_ENCODING_EUC_JP:
     enc = ONIG_ENCODING_EUC_JP;
     break;
   case REG_POSIX_ENCODING_SJIS:
     enc = ONIG_ENCODING_SJIS;
     break;
+#endif
   case REG_POSIX_ENCODING_UTF8:
     enc = ONIG_ENCODING_UTF8;
     break;
+#if 0
   case REG_POSIX_ENCODING_UTF16_BE:
     enc = ONIG_ENCODING_UTF16_BE;
     break;
   case REG_POSIX_ENCODING_UTF16_LE:
     enc = ONIG_ENCODING_UTF16_LE;
     break;
-
+#endif
   default:
     return ;
     break;

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project(oniguruma
-  VERSION 7.0.0
+  VERSION 6.9.8
   LANGUAGES C)
 
 set(PACKAGE onig)
@@ -9,8 +9,10 @@ set(PACKAGE_VERSION ${PROJECT_VERSION})
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(ENABLE_POSIX_API  "Include POSIX API" OFF)
 option(ENABLE_BINARY_COMPATIBLE_POSIX_API  "Include Binary compatible POSIX API" OFF)
+option(ENABLE_STATISTICS  "Include statistics API" OFF)
 option(INSTALL_DOCUMENTATION "Install documentation" ON)
 option(INSTALL_EXAMPLES "Install examples" OFF)
+option(BUILD_TEST "Build tests" ON)
 if(MSVC)
   option(MSVC_STATIC_RUNTIME "Build with static runtime" OFF)
 endif()
@@ -46,9 +48,9 @@ endif()
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/config.h.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 
 set(_SRCS src/regint.h src/regparse.h src/regenc.h src/st.h
- src/regerror.c src/regparse.c src/regcomp.c src/regexec.c
+ src/regerror.c src/regparse.c src/regext.c src/regcomp.c src/regexec.c
  src/reggnu.c src/regenc.c src/regsyntax.c src/regtrav.c src/regversion.c
- src/st.c
+ src/st.c src/onig_init.c
  src/unicode.c src/ascii.c src/utf8.c src/utf16_be.c src/utf16_le.c
  src/utf32_be.c src/utf32_le.c src/euc_jp.c src/sjis.c src/iso8859_1.c
  src/iso8859_2.c src/iso8859_3.c src/iso8859_4.c src/iso8859_5.c
@@ -70,6 +72,10 @@ endif()
 
 if(ENABLE_BINARY_COMPATIBLE_POSIX_API)
   add_definitions("-DUSE_BINARY_COMPATIBLE_POSIX_API")
+endif()
+
+if(ENABLE_STATISTICS)
+  add_definitions("-DONIG_DEBUG_STATISTICS")
 endif()
 
 add_library(onig ${_SRCS})
@@ -140,7 +146,7 @@ set(project_config "${generated_dir}/${PROJECT_NAME}Config.cmake")
 set(TARGETS_EXPORT_NAME "${PROJECT_NAME}Targets")
 set(namespace "${PROJECT_NAME}::")
 
-# Include module with fuction 'write_basic_package_version_file'
+# Include module with function 'write_basic_package_version_file'
 include(CMakePackageConfigHelpers)
 
 # Configure '<PROJECT-NAME>ConfigVersion.cmake'
@@ -159,6 +165,12 @@ configure_package_config_file(
     "${project_config}"
     INSTALL_DESTINATION "${config_install_dir}"
 )
+
+if(CMAKE_INSTALL_LIBDIR MATCHES "^/")
+    set(onig_pkgconfig_libdir "${CMAKE_INSTALL_LIBDIR}")
+else()
+    set(onig_pkgconfig_libdir "\${exec_prefix}/${CMAKE_INSTALL_LIBDIR}")
+endif()
 
 # Targets:
 #   * <prefix>/lib*/libonig.a
@@ -196,7 +208,7 @@ install(
     DESTINATION "${config_install_dir}"
 )
 
-# Documentation (uses onig not oniguruma for directory
+# Documentation (uses onig not oniguruma for directory)
 if(INSTALL_DOCUMENTATION)
 install(FILES doc/API doc/API.ja doc/RE doc/RE.ja doc/FAQ doc/FAQ.ja
               doc/CALLOUTS.BUILTIN doc/CALLOUTS.BUILTIN.ja
@@ -212,8 +224,8 @@ endif()
 # Examples
 if(INSTALL_EXAMPLES)
 install(FILES sample/bug_fix.c sample/callback_each_match.c
-              sample/callout.c sample/count.c sample/crnl.c
-              sample/echo.c sample/encode.c sample/listcap.c
+              sample/callout.c sample/count.c sample/echo.c
+              sample/encode.c sample/listcap.c
               sample/names.c sample/posix.c sample/regset.c
               sample/scan.c sample/simple.c sample/sql.c
               sample/syntax.c sample/user_property.c
@@ -231,3 +243,9 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/oniguruma.pc
 
 install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/onig-config
         DESTINATION "${CMAKE_INSTALL_BINDIR}")
+
+# Test
+if(BUILD_TEST)
+  add_subdirectory(test)
+  add_subdirectory(windows)
+endif(BUILD_TEST)

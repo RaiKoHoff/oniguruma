@@ -1,13 +1,11 @@
 [![Build Status](https://travis-ci.org/kkos/oniguruma.svg?branch=master)](https://travis-ci.org/kkos/oniguruma)
-[![Code Quality: Cpp](https://img.shields.io/lgtm/grade/cpp/g/kkos/oniguruma.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/kkos/oniguruma/context:cpp)
-[![Total Alerts](https://img.shields.io/lgtm/alerts/g/kkos/oniguruma.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/kkos/oniguruma/alerts)
 [![Fuzzing Status](https://oss-fuzz-build-logs.storage.googleapis.com/badges/oniguruma.svg)](https://oss-fuzz-build-logs.storage.googleapis.com/index.html#oniguruma)
 [![TrustInSoft CI](https://ci.trust-in-soft.com/projects/kkos/oniguruma.svg?branch=master)](https://ci.trust-in-soft.com/projects/kkos/oniguruma)
 
 Oniguruma
 =========
 
-**For a long time, Oniguruma has been under attack on Google search.** [(Issue #234)](https://github.com/kkos/oniguruma/issues/234)
+## **Since 2020, Oniguruma has been under attack on Google search in Japan.** [(Issue #234)](https://github.com/kkos/oniguruma/issues/234)
 
 
 https://github.com/kkos/oniguruma
@@ -35,6 +33,26 @@ Supported character encodings:
 Notice (from 6.9.6)
 -------------------
 When using configure script, if you have the POSIX API enabled in an earlier version (disabled by default in 6.9.5) and you need application binary compatibility with the POSIX API, specify "--enable-binary-compatible-posix-api=yes" instead of "--enable-posix-api=yes". Starting in 6.9.6, "--enable-posix-api=yes" only supports source-level compatibility for 6.9.5 and earlier about POSIX API. (Issue #210)
+
+
+Master branch
+-------------
+* Update Unicode version 15.0.0
+* NEW API: ONIG_OPTION_MATCH_WHOLE_STRING
+* Fixed: (?I) option was not enabled for character classes (Issue #264).
+* Changed specification to check for incorrect POSIX bracket (Issue #253).
+* Changed [[:punct:]] in Unicode encodings to be compatible with POSIX definition. (Issue #268)
+* Fixed: ONIG_OPTION_FIND_LONGEST behavior
+
+
+Version 6.9.8
+-------------
+* Update Unicode version 14.0.0
+* Whole options
+    * (?C) : ONIG_OPTION_DONT_CAPTURE_GROUP
+    * (?I) : ONIG_OPTION_IGNORECASE_IS_ASCII
+    * (?L) : ONIG_OPTION_FIND_LONGEST
+* Fixed some problems found by OSS-Fuzz
 
 
 Version 6.9.7
@@ -127,7 +145,7 @@ Install
 
 ### Case 1: Linux distribution packages
 
-   * Fedora:         `dnf install oniguruma`
+   * Fedora:         `dnf install oniguruma-devel`
    * RHEL/CentOS:    `yum install oniguruma`
    * Debian/Ubuntu:  `apt install libonig5`
    * Arch:           `pacman -S oniguruma`
@@ -250,6 +268,7 @@ Source Files
 |regcomp.c          |compiling and optimization functions                    |
 |regenc.c           |character encodings framework                           |
 |regerror.c         |error message function                                  |
+|regext.c           |extended API functions (deluxe version API)             |
 |regexec.c          |search and match functions                              |
 |regparse.c         |parsing functions.                                      |
 |regsyntax.c        |pattern syntax functions and built-in syntax definitions|

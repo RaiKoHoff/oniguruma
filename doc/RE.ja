@@ -1,4 +1,4 @@
-鬼車 正規表現 Version 6.9.6    2020/07/31
+鬼車 正規表現 Version 6.9.9    2022/08/28
 
 使用文法: ONIG_SYNTAX_ONIGURUMA (既定値)
 
@@ -243,9 +243,7 @@
       graph    [[:^space:]] && ^Control && ^Unassigned && ^Surrogate
       lower    Lowercase_Letter
       print    [[:graph:]] | [[:space:]]
-      punct    Connector_Punctuation | Dash_Punctuation | Close_Punctuation |
-               Final_Punctuation | Initial_Punctuation | Other_Punctuation |
-               Open_Punctuation
+      punct    Punctuation | Symbol
       space    Space_Separator | Line_Separator | Paragraph_Separator |
                U+0009 | U+000A | U+000B | U+000C | U+000D | U+0085
       upper    Uppercase_Letter
@@ -284,6 +282,17 @@
                       * これは次の')'またはパターンの終わりまでのグループを形成する
                         /ab(?i)c|def|gh/ == /ab(?i:c|def|gh)/
 
+  * (?i)オプションは、wordタイプ(\w, \p{Word})には有効ではない。但しwordタイプが文字クラスの中で使用された場合は有効になる。しかし、このことはwordタイプを(?W)オプションと共に使用した時にしか気にする必要はないであろう。
+
+
+  /(?CIL).../, /(?CIL:...)/   全体オプション
+
+                            このオプションは、正規表現全体に影響を及ぼす位置
+                            に置かれなければならない
+
+                            C: ONIG_OPTION_DONT_CAPTURE_GROUP
+                            I: ONIG_OPTION_IGNORECASE_IS_ASCII
+                            L: ONIG_OPTION_FIND_LONGEST
 
   (式)              捕獲式集合
   (?:式)            非捕獲式集合
@@ -536,7 +545,7 @@
    + 名前指定後方参照        \k<name>
    + 部分式呼出し            \g<name>, \g<group-num>
    + 不在式                 (?~|...|...)
-   + 不在停止               (?|...)
+   + 不在停止               (?~|...)
 
 
 補記 3. Perl 5.8.0と比較して存在しない機能

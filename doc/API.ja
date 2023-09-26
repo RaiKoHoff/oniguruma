@@ -1,4 +1,4 @@
-鬼車インターフェース Version 7.0.0   2021/06/23
+鬼車インターフェース Version 6.9.9   2022/11/16
 
 #include <oniguruma.h>
 
@@ -7,6 +7,8 @@
 
   ライブラリの初期化
   最初に呼び出す必要がある。
+
+  * onig_init() は廃止
 
   引数
   1 use_encodings:         使用する文字エンコーディングの配列
@@ -17,7 +19,7 @@
   エラー時: エラーコード < 0
 
 
-# int onig_error_code_to_str(UChar* err_buf, OnigPos err_code, ...)
+# int onig_error_code_to_str(UChar* err_buf, int err_code, ...)
 
   エラーメッセージを取得する。
 
@@ -170,6 +172,54 @@
   エラー時: エラーコード < 0
 
 
+
+# int onig_new_deluxe(regex_t** reg, const UChar* pattern, const UChar* pattern_end,
+                      OnigCompileInfo* ci, OnigErrorInfo* einfo)
+
+  この関数は廃止(使用不可)。
+  パターンと対象文字列の文字エンコーディングが異なる場合を許さなくなった。
+
+  正規表現オブジェクト(regex)を作成する。
+  この関数は、onig_new()のデラックス版。
+
+  戻り値
+  正常終了: ONIG_NORMAL == 0
+  エラー時: エラーコード < 0
+
+  引数
+  1 reg:         作成された正規表現オブジェクトを返すアドレス
+  2 pattern:     正規表現パターン文字列
+  3 pattern_end: 正規表現パターン文字列の終端アドレス(pattern + pattern length)
+  4 ci:          コンパイル情報
+
+    ci->num_of_elements: ciの要素数 (現在の版では: 5)
+    ci->pattern_enc:     パターン文字列の文字エンコーディング
+    ci->target_enc:      対象文字列の文字エンコーディング
+    ci->syntax:          正規表現パターン文法定義
+    ci->option:          正規表現コンパイル時オプション
+    ci->case_fold_flag:  ONIG_OPTION_IGNORECASEモードでの
+                         文字曖昧マッチ指定ビットフラグ
+
+       ONIGENC_CASE_FOLD_MIN:           最小
+       ONIGENC_CASE_FOLD_DEFAULT:       最小
+                                        onig_set_default_case_fold_flag()
+
+  5 err_info:    エラー情報を返すためのアドレス
+                 onig_error_code_to_str()の三番目の引数として使用する
+
+
+  異なる文字エンコーディングの組み合わせは、以下の場合にのみ許される。
+
+    pattern_enc: ASCII, ISO_8859_1
+    target_enc:  UTF16_BE, UTF16_LE, UTF32_BE, UTF32_LE
+
+    pattern_enc: UTF16_BE/LE
+    target_enc:  UTF16_LE/BE
+
+    pattern_enc: UTF32_BE/LE
+    target_enc:  UTF32_LE/BE
+
+
 # void onig_free(regex_t* reg)
 
   正規表現オブジェクトのメモリを解放する。
@@ -270,7 +320,8 @@
 
 
 
-# OnigPos onig_search(regex_t* reg, const UChar* str, const UChar* end, const UChar* start, const UChar* range, OnigRegion* region, OnigOptionType option)
+# int onig_search(regex_t* reg, const UChar* str, const UChar* end, const UChar* start,
+                   const UChar* range, OnigRegion* region, OnigOptionType option)
 
   正規表現で文字列を検索し、検索結果とマッチ領域を返す。
   正規表現オブジェクトの文字エンコーディングで、検索文字列として不正な文字列を渡してはいけない。
@@ -310,8 +361,12 @@
       onig_set_callout_user_data_of_match_param()で指定するuser_dataは、
       calloutで使用されるuser_dataと共用される。
 
+    ONIG_OPTION_MATCH_WHOLE_STRING  マッチした終端の位置がendになることを要求
 
-# OnigPos onig_search_with_param(regex_t* reg, const UChar* str, const UChar* end, const UChar* start, const UChar* range, OnigRegion* region, OnigOptionType option, OnigMatchParam* mp)
+
+# int onig_search_with_param(regex_t* reg, const UChar* str, const UChar* end,
+                   const UChar* start, const UChar* range, OnigRegion* region,
+                   OnigOptionType option, OnigMatchParam* mp)
 
   正規表現で文字列を検索し、検索結果とマッチ領域を返す。
   正規表現オブジェクトの文字エンコーディングで、検索文字列として不正な文字列を渡してはいけない。
@@ -321,7 +376,8 @@
   8 mp: マッチパラメタ値 (match_stack_limit, retry_limit_in_match, retry_limit_in_search)
 
 
-# OnigPos onig_match(regex_t* reg, const UChar* str, const UChar* end, const UChar* at, OnigRegion* region, OnigOptionType option)
+# int onig_match(regex_t* reg, const UChar* str, const UChar* end,
+                 const UChar* at, OnigRegion* region, OnigOptionType option)
 
   文字列の指定位置でマッチングを行い、結果とマッチ領域を返す。
   正規表現オブジェクトの文字エンコーディングで、検索文字列として不正な文字列を渡してはいけない。
@@ -346,9 +402,12 @@
     ONIG_OPTION_NOT_END_STRING      endを文字列終端と看做さない (\z, \Z 失敗)
     ONIG_OPTION_NOT_BEGIN_POSITION  startを検索開始位置と看做さない (\G 失敗)
     ONIG_OPTION_CALLBACK_EACH_MATCH 全てのマッチ成功に対してコールバック関数が呼び出される。
+    ONIG_OPTION_MATCH_WHOLE_STRING  マッチした終端の位置がendになることを要求
 
 
-# OnigPos onig_match_with_param(regex_t* reg, const UChar* str, const UChar* end, const UChar* at, OnigRegion* region, OnigOptionType option, OnigMatchParam* mp)
+# int onig_match_with_param(regex_t* reg, const UChar* str, const UChar* end,
+                            const UChar* at, OnigRegion* region,
+                            OnigOptionType option, OnigMatchParam* mp)
 
   文字列の指定位置でマッチングを行い、結果とマッチ領域を返す。
   正規表現オブジェクトの文字エンコーディングで、検索文字列として不正な文字列を渡してはいけない。
@@ -358,7 +417,10 @@
   7 mp: マッチパラメタ値 (match_stack_limit, retry_limit_in_match, retry_limit_in_search)
 
 
-# int onig_scan(regex_t* reg, const UChar* str, const UChar* end, OnigRegion* region, OnigOptionType option, int (*scan_callback)(int, OnigPos, OnigRegion*, void*), void* callback_arg)
+# int onig_scan(regex_t* reg, const UChar* str, const UChar* end,
+                OnigRegion* region, OnigOptionType option,
+                int (*scan_callback)(int, int, OnigRegion*, void*),
+                void* callback_arg)
 
   正規表現で文字列をスキャンして、マッチングする毎にコールバック関数を呼び出す。
   正規表現オブジェクトの文字エンコーディングで、検索文字列として不正な文字列を渡してはいけない。
@@ -417,7 +479,7 @@
   引数
   1 set: regsetオブジェクト
   2 at:  変更する場所のインデックス
-  2 reg: 正規表現オブジェクト
+  3 reg: 正規表現オブジェクト
 
   戻り値
   正常終了: ONIG_NORMAL == 0
@@ -459,7 +521,7 @@
   2 at:  正規表現オブジェクトのインデックス (ゼロ開始)
 
 
-# int onig_regset_search(OnigRegSet* set, const OnigUChar* str, const OnigUChar* end, const OnigUChar* start, const OnigUChar* range, OnigRegSetLead lead, OnigOptionType option, OnigPos* rmatch_pos)
+# int onig_regset_search(OnigRegSet* set, const OnigUChar* str, const OnigUChar* end, const OnigUChar* start, const OnigUChar* range, OnigRegSetLead lead, OnigOptionType option, int* rmatch_pos)
 
   regsetによる検索を実行する。
 
@@ -492,7 +554,7 @@
     ほとんどの場合、ONIG_REGSET_POSITION_LEADのほうが速いと思われる。
 
 
-# int onig_regset_search_with_param(OnigRegSet* set, const OnigUChar* str, const OnigUChar* end, const OnigUChar* start, const OnigUChar* range,  OnigRegSetLead lead, OnigOptionType option, OnigMatchParam* mps[], OnigPos* rmatch_pos)
+# int onig_regset_search_with_param(OnigRegSet* set, const OnigUChar* str, const OnigUChar* end, const OnigUChar* start, const OnigUChar* range,  OnigRegSetLead lead, OnigOptionType option, OnigMatchParam* mps[], int* rmatch_pos)
 
   regsetとOnigMatchParamオブジェクトによる検索を実行する。
 
@@ -576,7 +638,7 @@
   戻り値
   正常終了: 指定された名前に対するグループ数
             (例 /(?<x>..)(?<x>..)/  ==>  2)
-  名前に対するグループが存在しない: -1
+  名前に対するグループが存在しない: ONIGERR_UNDEFINED_NAME_REFERENCE
 
   引数
   1 reg:       正規表現オブジェクト
@@ -640,6 +702,15 @@
 # OnigSyntaxType*  onig_get_syntax(regex_t* reg)
 
   正規表現オブジェクトに対して、対応する値を返す。
+
+  引数
+  1 reg:    正規表現オブジェクト
+
+
+# OnigCaseFoldType onig_get_case_fold_flag(regex_t* reg)
+
+  正規表現オブジェクトに対して、case_fold_flag値を返す。
+  この関数は廃止予定(非推奨)。
 
   引数
   1 reg:    正規表現オブジェクト
@@ -867,6 +938,21 @@
   3 code: メタ文字のコードポイント または ONIG_INEFFECTIVE_META_CHAR.
 
 
+# OnigCaseFoldType onig_get_default_case_fold_flag()
+
+  デフォルトのcase foldフラグを取得する。
+  この関数は廃止予定(非推奨)。
+
+
+# int onig_set_default_case_fold_flag(OnigCaseFoldType case_fold_flag)
+
+  デフォルトのcase foldフラグをセットする。
+  この関数は廃止予定(非推奨)。
+
+  引数
+  1 case_fold_flag: case foldフラグ
+
+
 # unsigned int onig_get_match_stack_limit_size(void)
 
   マッチスタックサイズの最大値を返す。
@@ -1009,7 +1095,7 @@
 
   正常終了戻り値: ONIG_NORMAL
 
-  onig_init()を再度呼び出しても、以前に作成した正規表現オブジェクト
+  onig_initialize()を再度呼び出しても、以前に作成した正規表現オブジェクト
   を使用することはできない。
 
 
