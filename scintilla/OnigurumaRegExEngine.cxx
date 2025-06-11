@@ -64,10 +64,32 @@ using namespace Scintilla::Internal;
 
 enum class EOLmode : int { UDEF = -1, CRLF = SC_EOL_CRLF, CR = SC_EOL_CR, LF = SC_EOL_LF };
 
-static OnigEncoding s_UsedEncodingsTypes[] = { ONIG_ENCODING_UTF8, ONIG_ENCODING_UTF8_CR };
+static OnigEncoding s_UsedEncodingsTypes[] = { ONIG_ENCODING_UTF8 };
 
 // ============================================================================
 // ============================================================================
+
+// https://stackoverflow.com/questions/22937618/reference-what-does-this-regex-mean/
+
+#define NP3_ONIG_SYNTAX_FLAVOR ONIG_SYNTAX_DEFAULT // default is ONIG_SYNTAX_ONIGURUMA
+
+// ensure some from special syntax options are excluded/included
+
+const unsigned int RemSynOptions_1[1] = { 0 };
+const unsigned int RemSynOptions_2[] = {
+  ONIG_SYN_OP2_ESC_H_XDIGIT                 // remove to replace \h\H with [^\S\n\v\f\r\u2028\u2029]
+};
+
+const unsigned int AddSynOptions_1[] = {
+  ONIG_SYN_OP_ESC_LTGT_WORD_BEGIN_END       // \<. \>
+};
+const unsigned int AddSynOptions_2[] = {
+  ONIG_SYN_OP2_ESC_U_HEX4                   // \uHHHH
+};
+
+// -----------------------------------------------------------------------------
+
+
 
 // ------------------------------------
 // --- Onigmo Engine Simple Options ---
@@ -134,12 +156,8 @@ static void SetSimpleOptions(OnigOptionType &onigOptions, EOLmode /*eolMode*/,
   }
 
 }
+
 // ============================================================================
-
-
-#define NP3_ONIG_SYNTAX_FLAVOR (ONIG_SYNTAX_DEFAULT) // default is: ONIG_SYNTAX_ONIGURUMA
-
-// -----------------------------------------------------------------------------
 
 class OnigurumaRegExEngine : public RegexSearchBase
 {
@@ -161,7 +179,19 @@ public:
     onig_initialize(s_UsedEncodingsTypes, _ARRAYSIZE(s_UsedEncodingsTypes));
     onig_set_default_syntax(NP3_ONIG_SYNTAX_FLAVOR);        // std is: ONIG_SYNTAX_ONIGURUMA
 
-    m_OnigSyntax.op |= ONIG_SYN_OP_ESC_LTGT_WORD_BEGIN_END; // xcluded from ONIG_SYNTAX_DEFAULT ?
+    for (const auto op1 : RemSynOptions_1) {
+      m_OnigSyntax.op &= ~op1;
+    }
+    for (const auto op2 : RemSynOptions_2) {
+      m_OnigSyntax.op2 &= ~op2;
+    }
+
+    for (const auto op1 : AddSynOptions_1) {
+      m_OnigSyntax.op |= op1;
+    }
+    for (const auto op2 : AddSynOptions_2) {
+      m_OnigSyntax.op2 |= op2;
+    }
 
     onig_region_init(&m_Region);
   }
@@ -328,11 +358,9 @@ Sci::Position OnigurumaRegExEngine::FindText(Document* doc, Sci::Position minPos
 
     try {
 
-      OnigEncoding const onigEncType = ((eolMode == EOLmode::CR) ? ONIG_ENCODING_UTF8_CR : ONIG_ENCODING_UTF8);
-      
       OnigErrorInfo einfo;
       int const res = onig_new(&m_RegExpr, UCharCPtr(m_RegExprStrg.c_str()), UCharCPtr(m_RegExprStrg.c_str() + m_RegExprStrg.length()),
-                                m_CmplOptions, onigEncType, &m_OnigSyntax, &einfo);
+                               m_CmplOptions, ONIG_ENCODING_UTF8, &m_OnigSyntax, &einfo);
 
       if (res != ONIG_NORMAL) {
         onig_error_code_to_str(UCharPtr(m_ErrorInfo), res, &einfo);
@@ -559,7 +587,8 @@ void OnigurumaRegExEngine::clear() {
 // ----------------------------------------------------------------------------
 
 
-std::string OnigurumaRegExEngine::translateRegExpr(const std::string & regExprStr, bool wholeWord, bool wordStart, EndOfLine eolMode, OnigOptionType & /*rxOptions*/)
+std::string OnigurumaRegExEngine::translateRegExpr(const std::string & regExprStr, bool wholeWord, bool wordStart,
+                                                   EndOfLine eolMode, OnigOptionType & /*rxOptions*/)
 {
   UNREFERENCED_PARAMETER(eolMode);
 
@@ -585,6 +614,9 @@ std::string OnigurumaRegExEngine::translateRegExpr(const std::string & regExprSt
   //~replaceAll(transRegExpr, R"(\(?<!\w)(?=\w))", R"(\\<)"); // esc'd
   //~replaceAll(transRegExpr, R"(\>)", R"((?<=\w)(?!\w))"); // word end
   //~replaceAll(transRegExpr, R"(\(?<=\w)(?!\w))", R"(\\>)"); // esc'd
+
+  replaceAll(transRegExpr, R"(\h)", R"([^\S\n\v\f\r\u2028\u2029])"); // horizontal space
+  replaceAll(transRegExpr, R"(\H)", R"([^\t\p{Zs}])");               // not horizontal space
 
   #if 0
   // EOL modes is controlled by 
@@ -795,10 +827,8 @@ OnigPos SimpleRegExEngine::Find(const OnigUChar* pattern, const OnigUChar* docum
   try {
     onig_free(m_RegExpr);
 
-    OnigEncoding const onigEncType = ((m_EOLmode == EOLmode::CR) ? ONIG_ENCODING_UTF8_CR : ONIG_ENCODING_UTF8);
-
     OnigErrorInfo einfo;
-    int res = onig_new(&m_RegExpr, pattern, (pattern + patternLen), m_Options, onigEncType, &m_OnigSyntax, &einfo);
+    int res = onig_new(&m_RegExpr, pattern, (pattern + patternLen), m_Options, ONIG_ENCODING_UTF8, &m_OnigSyntax, &einfo);
 
     if (res != ONIG_NORMAL) {
       //onig_error_code_to_str(m_ErrorInfo, res, &einfo);
